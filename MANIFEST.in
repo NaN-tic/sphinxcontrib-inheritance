@@ -1,0 +1,10 @@
+include COPYRIGHT
+include README
+include LICENSE
+include CHANGELOG
+recursive-include sphinxcontrib
+recursive-include doc *.rst *.py Makefile
+recursive-include tests *.py
+prune doc/_build
+prune test/_build
+

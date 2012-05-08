@@ -1,0 +1,32 @@
+inheritance
+===========
+
+http://packages.python.org/sphinxcontrib-inheritance
+
+A Sphinx_ extension providing Tryton-specific markup.
+
+
+Installation
+------------
+
+This extension can be installed from the Python Package Index::
+
+  pip install sphinxcontrib-inheritance
+
+Alternatively, you can clone the inheritance repository from BitBucket,
+and install the extension directly from the repository::
+
+  hg clone https://bitbucket.org/albertnan/sphinxcontrib-inheritance
+  cd sphinxcontrib-inheritance
+  python setup.py install
+
+
+Usage
+-----
+
+Please refer to the documentation_ for further information.
+
+
+.. _`Sphinx`: http://sphinx.pocoo.org/latest
+.. _documentation: http://packages.python.org/sphinxcontrib-inheritance
+
