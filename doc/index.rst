@@ -74,3 +74,11 @@ section. Note that this means that this extension adds anchors to *all* rst
 elements (except inline directives) and thus you can access to 
 *filename.html#identifier_of_existing_paragraph*.
 
+Given that sphinx-build only re-reads files which have changed, you'll probably
+want to use the *-E* parameter to ensure all files are read on each build. The 
+reason is that if one of the files changed must alter the structure of 
+non-modified one, the changes will take no efect. If you use the standard
+sphinx Makefile you can modify the *SPHINXBUILD* variable like this::
+
+   SPHINXBUILD   = sphinx-build -E
+
