@@ -22,9 +22,9 @@ import tempfile
 
 
 src_chars = """àáäâÀÁÄÂèéëêÈÉËÊìíïîÌÍÏÎòóöôÒÓÖÔùúüûÙÚÜÛçñºª·¤ '"()/*-+?!&$[]{}@#`'^:;<>=~%\\""" 
-src_chars = unicode( src_chars, 'utf-8' )
+src_chars = unicode(src_chars, 'utf-8')
 dst_chars = """aaaaAAAAeeeeEEEEiiiiIIIIooooOOOOuuuuUUUUcnoa_e______________________________"""
-dst_chars = unicode( dst_chars, 'utf-8' )
+dst_chars = unicode(dst_chars, 'utf-8')
 
 def unaccent(text):
     if isinstance( text, str ):
@@ -33,6 +33,8 @@ def unaccent(text):
     for c in xrange(len(src_chars)):
         output = output.replace( src_chars[c], dst_chars[c] )
     return output.strip('_').encode( 'utf-8' )
+
+existing_ids = set()
 
 #def create_id(module, value):
 # TODO: Consider module?
@@ -97,15 +99,18 @@ class Replacer(Transform):
 
                 id, position, ref = refdata.split(':')
                 current_inherit_ref = ref
-                inherits[ref] = []
+                inherits[ref] = {
+                    'position': position,
+                    'nodes': [],
+                    }
                 if parent:
                     parent.replace(node, [])
                 continue
 
             if current_inherit_ref:
-                if parent and parent in inherits[current_inherit_ref]:
+                if parent and parent in inherits[current_inherit_ref]['nodes']:
                     continue
-                inherits[current_inherit_ref].append(node)
+                inherits[current_inherit_ref]['nodes'].append(node)
 
 def init_transformer(app):
     if app.config.inheritance_plaintext:
@@ -127,7 +132,6 @@ def add_references(app, doctree, fromdocname):
         if not parent:
             continue
         parent.replace(node, [targetnode, node])
-        print "ADDING: ..."
 
 def replace_inheritances(app, doctree, fromdocname):
     for node in doctree.traverse():
@@ -135,8 +139,13 @@ def replace_inheritances(app, doctree, fromdocname):
         text = node.astext()
         id = create_id(text)
         if id in inherits:
-            print "FOUND IN INHERITS: ", id, inherits[id]
-            parent.replace(node, inherits[id])
+            position = inherits[id]['position']
+            nodes = inherits[id]['nodes']
+            if position == u'after':
+                nodes = [node] + nodes
+            elif position == u'before':
+                nodes = nodes + [node]
+            parent.replace(node, nodes)
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')

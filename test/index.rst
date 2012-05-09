@@ -12,7 +12,6 @@ Contents:
    :maxdepth: 2
 
    test.rst
-   test-inheritance.rst
 
 Indices and tables
 ==================
