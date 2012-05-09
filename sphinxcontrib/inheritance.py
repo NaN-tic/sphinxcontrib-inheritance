@@ -69,6 +69,22 @@ def create_id(value):
     return identifier
 
 
+
+def check_module(app, docname, text):
+    modules = app.config.inheritance_modules
+    if isinstance(modules, (str, unicode)):
+        modules = [x.strip() for x in modules.split(',')]
+    path = os.path.split(docname)
+    if len(path) == 1:
+        return
+    module = path[-2]
+    if not module:
+        return
+    if module not in modules:
+        # If the module is not in the list of installed 
+        # modules set as if the document was empty.
+        text[0] = ''
+
 inherits = {}
 
 
@@ -149,8 +165,10 @@ def replace_inheritances(app, doctree, fromdocname):
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
-    app.add_config_value('inheritance_pattern', re.compile(r'@(.|[^@]+)@'), 'env')
+    app.add_config_value('inheritance_pattern', re.compile(r'#(.|[^#]+)#'), 'env')
+    app.add_config_value('inheritance_modules', [], 'env')
 
     app.connect(b'builder-inited', init_transformer)
+    app.connect(b'source-read', check_module)
     app.connect(b'doctree-resolved', replace_inheritances)
     app.connect(b'doctree-resolved', add_references)

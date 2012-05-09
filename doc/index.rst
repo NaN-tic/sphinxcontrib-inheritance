@@ -32,7 +32,17 @@ In order to use inheritance you should add it to the list of extensions in conf.
 
    extensions = ['sphinxcontrib.inheritance']
 
+You should also add the list of modules that should be processed::
+
+   inheritance_modules = 'submodule1, submodule2'
+
+or::
+
+   inheritance_modules = ['submodule1', 'submodule2']
+
 Usage
 -----
 
-In order to use this extension
+This extensiono
+
+Files containing inheritance information can be in subdirectories of the main one.
