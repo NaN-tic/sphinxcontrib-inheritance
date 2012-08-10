@@ -27,7 +27,7 @@ import sys, os
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinxcontrib.inheritance']
 
-inheritance_modules = 'submodule'
+inheritance_modules = 'submodule1, submodule2'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
