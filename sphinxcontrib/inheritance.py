@@ -3,7 +3,7 @@
     inheritance
     -----------
 
-    :copyright: Copyright 2011 by NaN Projectes de Programari Lliure, S.L.
+    :copyright: Copyright 2011-2012 by NaN Projectes de Programari Lliure, S.L.
     :license: BSD, see LICENSE for details.
 """
 
@@ -21,9 +21,11 @@ import re
 import tempfile
 
 
-src_chars = """àáäâÀÁÄÂèéëêÈÉËÊìíïîÌÍÏÎòóöôÒÓÖÔùúüûÙÚÜÛçñºª·¤ '"()/*-+?!&$[]{}@#`'^:;<>=~%\\""" 
+src_chars = """àáäâÀÁÄÂèéëêÈÉËÊìíïîÌÍÏÎòóöôÒÓÖÔùúüûÙÚÜÛçñºª·¤ '"()"""\
+    """/*-+?!&$[]{}@#`'^:;<>=~%\\""" 
 src_chars = unicode(src_chars, 'utf-8')
-dst_chars = """aaaaAAAAeeeeEEEEiiiiIIIIooooOOOOuuuuUUUUcnoa_e______________________________"""
+dst_chars = """aaaaAAAAeeeeEEEEiiiiIIIIooooOOOOuuuuUUUUcnoa_e_____"""\
+    """_________________________"""
 dst_chars = unicode(dst_chars, 'utf-8')
 
 def unaccent(text):
@@ -165,7 +167,8 @@ def replace_inheritances(app, doctree, fromdocname):
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
-    app.add_config_value('inheritance_pattern', re.compile(r'#(.|[^#]+)#'), 'env')
+    app.add_config_value('inheritance_pattern', re.compile(r'#(.|[^#]+)#'), 
+        'env')
     app.add_config_value('inheritance_modules', [], 'env')
 
     app.connect(b'builder-inited', init_transformer)
