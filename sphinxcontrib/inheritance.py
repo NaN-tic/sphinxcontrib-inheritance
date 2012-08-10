@@ -14,7 +14,7 @@ from sphinx.locale import _
 from sphinx.environment import NoUri
 from sphinx.util.compat import Directive
 from docutils.parsers.rst import directives, states
-from docutils import nodes
+import docutils.nodes 
 
 import os
 import re
@@ -67,7 +67,10 @@ def create_id(value):
                 break
             counter += 1
 
-    existing_ids.add(identifier)
+    # TODO: By now we do not want the identifier to change because create_id()
+    # is called more than once. We need to find a better solution for creating
+    # the paragraph ID.
+    #existing_ids.add(identifier)
     return identifier
 
 
@@ -102,6 +105,9 @@ class Replacer(Transform):
 
         current_inherit_ref = None
         for node in self.document.traverse():
+            if not isinstance(node, (docutils.nodes.paragraph, 
+                        docutils.nodes.title)):
+                continue
             parent = node.parent
             text = node.astext()
             match = pattern.search(text)
@@ -137,9 +143,11 @@ def init_transformer(app):
 def add_references(app, doctree, fromdocname):
     counter = 0
     for node in doctree.traverse():
-        if isinstance(node, nodes.Inline):
+        if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
             # We do not want to consider inline nodes such as emphasis, 
-            # strong or literal
+            # strong or literal. Nor Text nodes which are the part of the 
+            # paragraph that precede an inline node. There's already the 
+            # Paragraph node and the anchor is added to it.
             continue
         
         counter += 1
@@ -153,10 +161,17 @@ def add_references(app, doctree, fromdocname):
 
 def replace_inheritances(app, doctree, fromdocname):
     for node in doctree.traverse():
+        # Apply only to paragraphs and titles. Otherwise it would also be 
+        # applied to docutils.nodes.Text which is the next node inside 
+        # paragraph and thus duplicating the inheritance
+        if not isinstance(node, (docutils.nodes.paragraph, 
+                    docutils.nodes.title)):
+            continue
         parent = node.parent
         text = node.astext()
         id = create_id(text)
         if id in inherits:
+            inh = str(inherits.keys())
             position = inherits[id]['position']
             nodes = inherits[id]['nodes']
             if position == u'after':
