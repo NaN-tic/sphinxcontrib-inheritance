@@ -13,7 +13,7 @@ setup(
     url='http://packages.python.org/sphinxcontrib-inheritance',
     download_url='http://pypi.python.org/pypi/sphinxcontrib-inheritance',
     license='BSD',
-    author='NaN Projectes de Programari Lliure, S.L.',
+    author='NaN·tic',
     author_email='info@nan-tic.com',
     description='Documentation inheritance functionality for Sphinx',
     long_description=long_desc,
