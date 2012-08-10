@@ -28,7 +28,8 @@ Use ``pip`` to install this extension straight from the Python Package Index::
 Configuration
 -------------
 
-In order to use inheritance you should add it to the list of extensions in conf.py::
+In order to use inheritance you should add it to the list of extensions in 
+conf.py::
 
    extensions = ['sphinxcontrib.inheritance']
 
@@ -43,7 +44,8 @@ or::
 Usage
 -----
 
-Given an existing sphinx project, you can add text from a new module in the following way:
+Given an existing sphinx project, you can add text from a new module in the 
+following way:
 
 * Create a subdirectory in the project. For example *submodule1*.
 * Add this directory to inheritance_modules if it must be built.
@@ -61,11 +63,12 @@ Possible positions accepted by the extension are:
 * *after* which adds the supplied paragraph after the referenced one
 * *before* which adds the supplied paragraph before the referenced one
 * *replace* which replaces the referenced paragraph with the text provided.
-Files containing inheritance information can be in subdirectories of the main one.
+Files containing inheritance information can be in subdirectories of the main 
+one.
 
 A paragraph's identifier is automatically created by the system by replacing 
-spaces and other non-ascii charaters by "**_**" and picking only the first 7 words
-of the paragraph. If two paragraphs would result in the same identifier a
+spaces and other non-ascii charaters by "**_**" and picking only the first 7 
+words of the paragraph. If two paragraphs would result in the same identifier a
 number will be appended to ensure it is unique.
 
 Currently, the only way to see this ID is taking a look at the HTML code 
@@ -76,7 +79,7 @@ elements (except inline directives) and thus you can access to
 
 Given that sphinx-build only re-reads files which have changed, you'll probably
 want to use the *-E* parameter to ensure all files are read on each build. The 
-reason is that if one of the files changed must alter the structure of 
+reason is that if one of the files changed must alter the structure of a
 non-modified one, the changes will take no efect. If you use the standard
 sphinx Makefile you can modify the *SPHINXBUILD* variable like this::
 
