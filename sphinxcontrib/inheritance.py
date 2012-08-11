@@ -10,6 +10,7 @@
 from docutils import nodes
 from docutils.transforms import Transform
 
+import sphinx
 from sphinx.locale import _
 from sphinx.environment import NoUri
 from sphinx.util.compat import Directive
@@ -141,7 +142,6 @@ def init_transformer(app):
         app.add_transform(Replacer)
 
 def add_references(app, doctree, fromdocname):
-    counter = 0
     for node in doctree.traverse():
         if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
             # We do not want to consider inline nodes such as emphasis, 
@@ -149,15 +149,20 @@ def add_references(app, doctree, fromdocname):
             # paragraph that precede an inline node. There's already the 
             # Paragraph node and the anchor is added to it.
             continue
-        
-        counter += 1
-        targetid = create_id(node.astext())
-        targetnode = nodes.target('', '', ids=[targetid])
- 
-        parent = node.parent
-        if not parent:
+        if not node.parent:
             continue
-        parent.replace(node, [targetnode, node])
+
+        targetid = create_id(node.astext())
+        node_list = []
+        node_list.append(docutils.nodes.target('', '', ids=[targetid]))
+        if app.config.inheritance_debug:
+            node_type = str(type(node)).split('.')[-1].rstrip("'>")
+            text = '%s: %s' % (node_type, targetid)
+            abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]', 
+                explanation=text)
+            node_list.append(abbrnode)
+        node_list.append(node)
+        node.parent.replace(node, node_list)
 
 def replace_inheritances(app, doctree, fromdocname):
     for node in doctree.traverse():
@@ -185,6 +190,7 @@ def setup(app):
     app.add_config_value('inheritance_pattern', re.compile(r'#(.|[^#]+)#'), 
         'env')
     app.add_config_value('inheritance_modules', [], 'env')
+    app.add_config_value('inheritance_debug', False, 'env'), 
 
     app.connect(b'builder-inited', init_transformer)
     app.connect(b'source-read', check_module)

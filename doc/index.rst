@@ -71,11 +71,12 @@ spaces and other non-ascii charaters by "**_**" and picking only the first 7
 words of the paragraph. If two paragraphs would result in the same identifier a
 number will be appended to ensure it is unique.
 
-Currently, the only way to see this ID is taking a look at the HTML code 
-generated and see what 'id' attribute has been given to the paragraph or 
-section. Note that this means that this extension adds anchors to *all* rst
-elements (except inline directives) and thus you can access to 
-*filename.html#identifier_of_existing_paragraph*.
+There are two ways of knowing this ID:
+
+
+* Taking a look at the HTML code generated and see what 'id' attribute has been given to the paragraph or section. Note that this means that this extension adds anchors to *all* rst elements (except inline directives) and thus you can access to *filename.html#identifier_of_existing_paragraph*.
+
+* Adding the configuration value *inheritance_debug* in your *conf.py*. That will add a *[+id]* on each paragraph (or item which can be hooked to) and it will display a tooltip on hover with the type of element (such as Paragraph, Title or Section) followed by the identifier. Note that this approach is only valid for HTML output.
 
 Given that sphinx-build only re-reads files which have changed, you'll probably
 want to use the *-E* parameter to ensure all files are read on each build. The 
