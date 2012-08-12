@@ -9,7 +9,7 @@ requires = ['Sphinx>=1.0b2']
 
 setup(
     name='sphinxcontrib-inheritance',
-    version='0.1',
+    version='0.2',
     url='http://packages.python.org/sphinxcontrib-inheritance',
     download_url='http://pypi.python.org/pypi/sphinxcontrib-inheritance',
     license='BSD',
