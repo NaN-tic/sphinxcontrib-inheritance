@@ -51,7 +51,7 @@ following way:
 * Add this directory to inheritance_modules if it must be built.
 * Create any number of .rst files in the directory with the following syntax::
 
-   #:after:identifier_of_existing_paragraph#
+   #:after:module/file:identifier_of_existing_paragraph#
 
    This is the text to be included after the existing paragraph.
 
@@ -63,8 +63,9 @@ Possible positions accepted by the extension are:
 * *after* which adds the supplied paragraph after the referenced one
 * *before* which adds the supplied paragraph before the referenced one
 * *replace* which replaces the referenced paragraph with the text provided.
+
 Files containing inheritance information can be in subdirectories of the main 
-one.
+one. And 'file' should have the '.rst' extension removed.
 
 A paragraph's identifier is automatically created by the system by replacing 
 spaces and other non-ascii charaters by "**_**" and picking only the first 7 

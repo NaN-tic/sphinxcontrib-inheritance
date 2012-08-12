@@ -39,10 +39,13 @@ def unaccent(text):
 
 existing_ids = set()
 
-#def create_id(module, value):
-# TODO: Consider module?
-def create_id(value):
+def create_id(source, value):
     found = False
+    splitted = source.split(os.path.sep)
+    if len(splitted) >= 2:
+        prefix = '%s/%s' % (splitted[-2], splitted[-1].rstrip('.rst'))
+    else:
+        prefix = ''
     word_count = 7
     while True:
         words = unaccent(value.strip()).lower()
@@ -51,6 +54,7 @@ def create_id(value):
         words = words.replace('_',' ')
         words = words.split()
         identifier = '_'.join(words[:word_count])
+        identifier = '%s:%s' % (prefix, identifier)
 
         if not identifier in existing_ids:
             found = True
@@ -122,7 +126,14 @@ class Replacer(Transform):
                 # extract the reference data (excluding the leading dash)
                 refdata = match.group(1)
 
-                id, position, ref = refdata.split(':')
+                try:
+                    id, position, refsource, refid = refdata.split(':')
+                except ValueError:
+                    source = (node.document and 
+                        node.document.attributes['source'] or '')
+                    raise ValueError('Invalid inheritance ref "%s" at %s:%s' % (
+                            refdata, source, node.line))
+                ref = '%s:%s' % (refsource, refid)
                 current_inherit_ref = ref
                 inherits[ref] = {
                     'position': position,
@@ -152,7 +163,9 @@ def add_references(app, doctree, fromdocname):
         if not node.parent:
             continue
 
-        targetid = create_id(node.astext())
+        source = node.document and node.document.attributes['source'] or ''
+        targetid = create_id(source, node.astext())
+
         node_list = []
         node_list.append(docutils.nodes.target('', '', ids=[targetid]))
         if app.config.inheritance_debug:
@@ -174,7 +187,8 @@ def replace_inheritances(app, doctree, fromdocname):
             continue
         parent = node.parent
         text = node.astext()
-        id = create_id(text)
+        source = node.document and node.document.attributes['source'] or ''
+        id = create_id(source, text)
         if id in inherits:
             inh = str(inherits.keys())
             position = inherits[id]['position']
@@ -194,5 +208,5 @@ def setup(app):
 
     app.connect(b'builder-inited', init_transformer)
     app.connect(b'source-read', check_module)
-    app.connect(b'doctree-resolved', replace_inheritances)
     app.connect(b'doctree-resolved', add_references)
+    app.connect(b'doctree-resolved', replace_inheritances)
