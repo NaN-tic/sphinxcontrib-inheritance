@@ -51,29 +51,34 @@ following way:
 * Add this directory to inheritance_modules if it must be built.
 * Create any number of .rst files in the directory with the following syntax::
 
-   #:after:module/file:identifier_of_existing_paragraph#
+   #:after:module/file:node_type:identifier_of_existing_paragraph#
 
    This is the text to be included after the existing paragraph.
 
    As well as any other text until the next #::# directive or the end of file.
 
-And that's it. The text provided will be added after the mentioned paragraph. 
+And that's it. The text provided will be added after the mentioned node. 
 Possible positions accepted by the extension are:
 
-* *after* which adds the supplied paragraph after the referenced one
-* *before* which adds the supplied paragraph before the referenced one
-* *replace* which replaces the referenced paragraph with the text provided.
+* *after* which adds the supplied node after the referenced one
+* *before* which adds the supplied node before the referenced one
+* *replace* which replaces the referenced node with the text provided.
 
 Files containing inheritance information can be in subdirectories of the main 
 one. And 'file' should have the '.rst' extension removed.
 
-A paragraph's identifier is automatically created by the system by replacing 
+*node_type* examples are *paragraph*, *title* or *section*. Note that a section
+and its title may have the same identifier but replacing the section replaces
+the title and all the paragraphs in the section. The same applies to the 
+*after* position. Using *after* on a *title* implies that the new node will be
+the first in the *section*, wheareas using it with a *section* it means it will
+go after the last paragraph of the section.
+
+A node's identifier is automatically created by the system by replacing 
 spaces and other non-ascii charaters by "**_**" and picking only the first 7 
-words of the paragraph. If two paragraphs would result in the same identifier a
-number will be appended to ensure it is unique.
+words of the node.
 
 There are two ways of knowing this ID:
-
 
 * Taking a look at the HTML code generated and see what 'id' attribute has been given to the paragraph or section. Note that this means that this extension adds anchors to *all* rst elements (except inline directives) and thus you can access to *filename.html#identifier_of_existing_paragraph*.
 

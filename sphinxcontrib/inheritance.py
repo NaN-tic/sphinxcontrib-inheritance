@@ -19,6 +19,7 @@ import docutils.nodes
 
 import os
 import re
+import sys
 import tempfile
 
 
@@ -30,17 +31,25 @@ dst_chars = """aaaaAAAAeeeeEEEEiiiiIIIIooooOOOOuuuuUUUUcnoa_e_____"""\
 dst_chars = unicode(dst_chars, 'utf-8')
 
 def unaccent(text):
-    if isinstance( text, str ):
-        text = unicode( text, 'utf-8' )
+    if isinstance(text, str):
+        text = unicode(text, 'utf-8')
     output = text
     for c in xrange(len(src_chars)):
-        output = output.replace( src_chars[c], dst_chars[c] )
-    return output.strip('_').encode( 'utf-8' )
+        output = output.replace(src_chars[c], dst_chars[c])
+    return output.strip('_').encode('utf-8')
+
+def get_node_type(node):
+    return str(type(node)).split('.')[-1].rstrip("'>")
 
 existing_ids = set()
 
-def create_id(source, value):
+def create_id(node):
     found = False
+    value = node.astext()
+    value = value.replace('[+id]', '')
+    value = value.strip()
+    node_type = get_node_type(node)
+    source = node.document and node.document.attributes['source'] or ''
     splitted = source.split(os.path.sep)
     if len(splitted) >= 2:
         prefix = '%s/%s' % (splitted[-2], splitted[-1].rstrip('.rst'))
@@ -48,13 +57,13 @@ def create_id(source, value):
         prefix = ''
     word_count = 7
     while True:
-        words = unaccent(value.strip()).lower()
+        words = unaccent(value).lower()
         words = words.replace(':','_')
         words = words.replace('.','_')
         words = words.replace('_',' ')
         words = words.split()
         identifier = '_'.join(words[:word_count])
-        identifier = '%s:%s' % (prefix, identifier)
+        identifier = '%s:%s:%s' % (prefix, node_type, identifier)
 
         if not identifier in existing_ids:
             found = True
@@ -110,8 +119,7 @@ class Replacer(Transform):
 
         current_inherit_ref = None
         for node in self.document.traverse():
-            if not isinstance(node, (docutils.nodes.paragraph, 
-                        docutils.nodes.title)):
+            if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
                 continue
             parent = node.parent
             text = node.astext()
@@ -126,18 +134,22 @@ class Replacer(Transform):
                 # extract the reference data (excluding the leading dash)
                 refdata = match.group(1)
 
+                source = (node.document and node.document.attributes['source'] 
+                    or '')
                 try:
-                    id, position, refsource, refid = refdata.split(':')
+                    id, position, refsource, reftype, refid = (
+                        refdata.split(':'))
                 except ValueError:
-                    source = (node.document and 
-                        node.document.attributes['source'] or '')
                     raise ValueError('Invalid inheritance ref "%s" at %s:%s' % (
                             refdata, source, node.line))
-                ref = '%s:%s' % (refsource, refid)
+                ref = '%s:%s:%s' % (refsource, reftype, refid)
                 current_inherit_ref = ref
                 inherits[ref] = {
                     'position': position,
                     'nodes': [],
+                    'replaced': False,
+                    'source': source,
+                    'line': node.line,
                     }
                 if parent:
                     parent.replace(node, [])
@@ -163,16 +175,12 @@ def add_references(app, doctree, fromdocname):
         if not node.parent:
             continue
 
-        source = node.document and node.document.attributes['source'] or ''
-        targetid = create_id(source, node.astext())
-
+        targetid = create_id(node)
         node_list = []
         node_list.append(docutils.nodes.target('', '', ids=[targetid]))
         if app.config.inheritance_debug:
-            node_type = str(type(node)).split('.')[-1].rstrip("'>")
-            text = '%s: %s' % (node_type, targetid)
             abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]', 
-                explanation=text)
+                explanation=targetid)
             node_list.append(abbrnode)
         node_list.append(node)
         node.parent.replace(node, node_list)
@@ -182,13 +190,12 @@ def replace_inheritances(app, doctree, fromdocname):
         # Apply only to paragraphs and titles. Otherwise it would also be 
         # applied to docutils.nodes.Text which is the next node inside 
         # paragraph and thus duplicating the inheritance
-        if not isinstance(node, (docutils.nodes.paragraph, 
-                    docutils.nodes.title)):
+        if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
             continue
         parent = node.parent
         text = node.astext()
         source = node.document and node.document.attributes['source'] or ''
-        id = create_id(source, text)
+        id = create_id(node)
         if id in inherits:
             inh = str(inherits.keys())
             position = inherits[id]['position']
@@ -198,6 +205,13 @@ def replace_inheritances(app, doctree, fromdocname):
             elif position == u'before':
                 nodes = nodes + [node]
             parent.replace(node, nodes)
+            inherits[id]['replaced'] = True
+
+    for key, values in inherits.iteritems():
+        if values['replaced']:
+            continue
+        sys.stderr.write("%s:%s:: WARNING: Inheritance ref '%s' not found.\n" % 
+            (values['source'], values['line'], key))
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
