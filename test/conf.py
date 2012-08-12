@@ -43,7 +43,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Inheritance Test'
-copyright = u'2011, NaN·tic: NaN Projectes de Programari Lliure, S.L.'
+copyright = u'2011-2012, NaN·tic: NaN Projectes de Programari Lliure, S.L.'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
