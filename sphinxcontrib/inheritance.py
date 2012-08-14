@@ -156,8 +156,16 @@ class Replacer(Transform):
                 continue
 
             if current_inherit_ref:
-                if parent and parent in inherits[current_inherit_ref]['nodes']:
-                    continue
+                if parent:
+                    found = False
+                    p = parent
+                    while p:
+                        if p in inherits[current_inherit_ref]['nodes']:
+                            found = True
+                            break
+                        p = p.parent
+                    if found:
+                        continue
                 inherits[current_inherit_ref]['nodes'].append(node)
 
 def init_transformer(app):
