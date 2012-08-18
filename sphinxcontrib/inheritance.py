@@ -231,6 +231,6 @@ def setup(app):
 
     app.connect(b'builder-inited', init_transformer)
     app.connect(b'source-read', check_module)
-    app.connect(b'doctree-resolved', add_references)
     app.connect(b'doctree-resolved', replace_inheritances)
+    app.connect(b'doctree-resolved', add_references)
     app.connect(b'build-finished', report_warnings)
