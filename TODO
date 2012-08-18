@@ -1,0 +1,4 @@
+- Allow adding items in bullet lists as if the items were in the original list.
+  Currently it is only possible to add a new bullet list which adds a space 
+  between the existing and the new one (by doing :after:*:bulletlist:) or add a 
+  subitem of a existing item in the list (by doing :after:*:list_item).
