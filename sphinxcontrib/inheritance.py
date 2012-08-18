@@ -147,7 +147,7 @@ class Replacer(Transform):
                 inherits[ref] = {
                     'position': position,
                     'nodes': [],
-                    'replaced': False,
+                    'replaced': 0,
                     'source': source,
                     'line': node.line,
                     }
@@ -193,34 +193,39 @@ def add_references(app, doctree, fromdocname):
         node_list.append(node)
         node.parent.replace(node, node_list)
 
+def apply_inheritance(node):
+    if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
+        return
+    parent = node.parent
+    text = node.astext()
+    source = node.document and node.document.attributes['source'] or ''
+    id = create_id(node)
+    if id in inherits:
+        position = inherits[id]['position']
+        nodes = inherits[id]['nodes']
+        for n in nodes:
+            for sn in n.traverse():
+                apply_inheritance(sn)
+        if position == u'after':
+            nodes = [node] + nodes
+        elif position == u'before':
+            nodes = nodes + [node]
+        parent.replace(node, nodes)
+        inherits[id]['replaced'] += 1
+
 def replace_inheritances(app, doctree, fromdocname):
     for node in doctree.traverse():
-        # Apply only to paragraphs and titles. Otherwise it would also be 
-        # applied to docutils.nodes.Text which is the next node inside 
-        # paragraph and thus duplicating the inheritance
-        if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
-            continue
-        parent = node.parent
-        text = node.astext()
-        source = node.document and node.document.attributes['source'] or ''
-        id = create_id(node)
-        if id in inherits:
-            inh = str(inherits.keys())
-            position = inherits[id]['position']
-            nodes = inherits[id]['nodes']
-            if position == u'after':
-                nodes = [node] + nodes
-            elif position == u'before':
-                nodes = nodes + [node]
-            parent.replace(node, nodes)
-            inherits[id]['replaced'] = True
+        apply_inheritance(node)
 
 def report_warnings(app, exception):
     for key, values in inherits.iteritems():
-        if values['replaced']:
+        if not values['replaced']:
+            sys.stderr.write("%s:%s:: WARNING: Inheritance ref '%s' not found.\n" 
+                % (values['source'], values['line'], key))
             continue
-        sys.stderr.write("%s:%s:: WARNING: Inheritance ref '%s' not found.\n" % 
-            (values['source'], values['line'], key))
+        if app.config.inheritance_debug:
+            sys.stderr.write('%s:%s:: "%s" was replaced %d times.\n' % (
+                    values['source'], values['line'], key, values['replaced']))
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
