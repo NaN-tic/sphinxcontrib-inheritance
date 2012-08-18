@@ -215,6 +215,7 @@ def replace_inheritances(app, doctree, fromdocname):
             parent.replace(node, nodes)
             inherits[id]['replaced'] = True
 
+def report_warnings(app, exception):
     for key, values in inherits.iteritems():
         if values['replaced']:
             continue
@@ -232,3 +233,4 @@ def setup(app):
     app.connect(b'source-read', check_module)
     app.connect(b'doctree-resolved', add_references)
     app.connect(b'doctree-resolved', replace_inheritances)
+    app.connect(b'build-finished', report_warnings)
