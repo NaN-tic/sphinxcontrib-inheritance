@@ -7,6 +7,12 @@
     :license: BSD, see LICENSE for details.
 """
 
+import os
+import re
+import sys
+import tempfile
+import unicodedata
+
 from docutils import nodes
 from docutils.transforms import Transform
 
@@ -17,26 +23,13 @@ from sphinx.util.compat import Directive
 from docutils.parsers.rst import directives, states
 import docutils.nodes 
 
-import os
-import re
-import sys
-import tempfile
 
-
-src_chars = """àáäâÀÁÄÂèéëêÈÉËÊìíïîÌÍÏÎòóöôÒÓÖÔùúüûÙÚÜÛçñºª·¤ '"()"""\
-    """/*-+?!&$[]{}@#`'^:;<>=~%\\""" 
-src_chars = unicode(src_chars, 'utf-8')
-dst_chars = """aaaaAAAAeeeeEEEEiiiiIIIIooooOOOOuuuuUUUUcnoa_e_____"""\
-    """_________________________"""
-dst_chars = unicode(dst_chars, 'utf-8')
-
-def unaccent(text):
+def slugify(text):                                                             
     if isinstance(text, str):
         text = unicode(text, 'utf-8')
-    output = text
-    for c in xrange(len(src_chars)):
-        output = output.replace(src_chars[c], dst_chars[c])
-    return output.strip('_').encode('utf-8')
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore')      
+    text = unicode(re.sub('[^\w\s-]', '', text).strip().lower())              
+    return re.sub('[-\s]+', '_', text)
 
 def get_node_type(node):
     return str(type(node)).split('.')[-1].rstrip("'>")
@@ -57,7 +50,7 @@ def create_id(node):
         prefix = ''
     word_count = 7
     while True:
-        words = unaccent(value).lower()
+        words = slugify(value)
         words = words.replace(':','_')
         words = words.replace('.','_')
         words = words.replace('_',' ')
