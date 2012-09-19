@@ -5,7 +5,7 @@ Prerequisites
 -------------
 
  * Python 2.6 or later (http://www.python.org/)
- * trytond (http://www.tryton.org/)
+ * Sphinx
 
 Installation
 ------------

@@ -3,7 +3,7 @@ inheritance
 
 http://packages.python.org/sphinxcontrib-inheritance
 
-A Sphinx_ extension providing Tryton-specific markup.
+A Sphinx_ extension that allows to create documentation in a modular way.
 
 
 Installation
