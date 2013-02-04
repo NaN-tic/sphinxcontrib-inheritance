@@ -213,6 +213,10 @@ def apply_inheritance(app, node):
 def replace_inheritances(app, doctree, fromdocname):
     for node in doctree.traverse():
         apply_inheritance(app, node)
+    # regenerate the ToC of each page.
+    # TODO: it could be improved generating only for modified pages in
+    # inheritance
+    app.builder.env.build_toc_from(fromdocname, doctree)
 
 def report_warnings(app, exception):
     for key, value_list in inherits.iteritems():
