@@ -10,17 +10,16 @@
 import os
 import re
 import sys
-import tempfile
 import unicodedata
 
-from docutils import nodes
+#from docutils import nodes
 from docutils.transforms import Transform
 
 import sphinx
-from sphinx.locale import _
-from sphinx.environment import NoUri
-from sphinx.util.compat import Directive
-from docutils.parsers.rst import directives, states
+#from sphinx.locale import _
+#from sphinx.environment import NoUri
+#from sphinx.util.compat import Directive
+#from docutils.parsers.rst import directives, states
 import docutils.nodes 
 
 
@@ -118,6 +117,8 @@ class Replacer(Transform):
             text = node.astext()
             match = pattern.search(text)
             if match:
+                if node.line is None:
+                    continue
                 # catch invalid pattern with too many groups
                 if len(match.groups()) != 1:
                     raise ValueError(
@@ -137,13 +138,14 @@ class Replacer(Transform):
                             refdata, source, node.line))
                 ref = '%s:%s:%s' % (refsource, reftype, refid)
                 current_inherit_ref = ref
-                inherits[ref] = {
+                current_inherit_vals = {
                     'position': position,
                     'nodes': [],
                     'replaced': 0,
                     'source': source,
                     'line': node.line,
                     }
+                inherits.setdefault(ref, []).append(current_inherit_vals)
                 if parent:
                     parent.replace(node, [])
                 continue
@@ -153,13 +155,13 @@ class Replacer(Transform):
                     found = False
                     p = parent
                     while p:
-                        if p in inherits[current_inherit_ref]['nodes']:
+                        if p in current_inherit_vals['nodes']:
                             found = True
                             break
                         p = p.parent
                     if found:
                         continue
-                inherits[current_inherit_ref]['nodes'].append(node)
+                current_inherit_vals['nodes'].append(node)
 
 def init_transformer(app):
     if app.config.inheritance_plaintext:
@@ -186,39 +188,43 @@ def add_references(app, doctree, fromdocname):
         node_list.append(node)
         node.parent.replace(node, node_list)
 
-def apply_inheritance(node):
+def apply_inheritance(app, node):
     if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
         return
     parent = node.parent
-    text = node.astext()
-    source = node.document and node.document.attributes['source'] or ''
+    #text = node.astext()
+    #source = node.document and node.document.attributes['source'] or ''
     id = create_id(node)
-    if id in inherits:
-        position = inherits[id]['position']
-        nodes = inherits[id]['nodes']
+    for inherit_vals in inherits.get(id, []):
+        # aquest debug falla
+        position = inherit_vals['position']
+        nodes = inherit_vals['nodes']
         for n in nodes:
             for sn in n.traverse():
-                apply_inheritance(sn)
+                apply_inheritance(app, sn)
         if position == u'after':
-            nodes = [node] + nodes
+            nodes.insert(0, node)
         elif position == u'before':
-            nodes = nodes + [node]
+            nodes.append(node)
+        # aquest debug falla
         parent.replace(node, nodes)
-        inherits[id]['replaced'] += 1
+        inherit_vals['replaced'] += 1
 
 def replace_inheritances(app, doctree, fromdocname):
     for node in doctree.traverse():
-        apply_inheritance(node)
+        apply_inheritance(app, node)
 
 def report_warnings(app, exception):
-    for key, values in inherits.iteritems():
-        if not values['replaced']:
-            sys.stderr.write("%s:%s:: WARNING: Inheritance ref '%s' not found.\n" 
-                % (values['source'], values['line'], key))
-            continue
-        if app.config.inheritance_debug:
-            sys.stderr.write('%s:%s:: "%s" was replaced %d times.\n' % (
-                    values['source'], values['line'], key, values['replaced']))
+    for key, value_list in inherits.iteritems():
+        for values in value_list:
+            if not values['replaced']:
+                sys.stderr.write("%s:%s:: WARNING: Inheritance ref '%s' not "
+                        "found.\n" % (values['source'], values['line'], key))
+                continue
+            if app.config.inheritance_debug:
+                sys.stderr.write('%s:%s:: "%s" was replaced %d times.\n'
+                        % (values['source'], values['line'], key,
+                            values['replaced']))
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
