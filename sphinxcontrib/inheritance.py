@@ -12,15 +12,43 @@ import re
 import sys
 import unicodedata
 
-#from docutils import nodes
-from docutils.transforms import Transform
-
+import docutils.nodes 
 import sphinx
+from docutils.parsers.rst import Directive
+from docutils.transforms import Transform
+from sphinx import addnodes
 #from sphinx.locale import _
 #from sphinx.environment import NoUri
 #from sphinx.util.compat import Directive
 #from docutils.parsers.rst import directives, states
-import docutils.nodes 
+
+SUPORTED_NODETYPES = [
+#    'document',
+    'section',
+    'title',
+    'paragraph',
+    'block_quote',
+    'literal_block',
+    'note',
+    'tip',
+    'warning',
+    'important',
+    'bullet_list',
+    'list_item',
+    'figure',
+#    'caption',
+    'toctree',
+#    'compound',
+    'comment',
+    ]
+
+existing_ids = set()
+inherits = {}
+doctree_pages = {}
+inherit_types = set()
+
+
+class inheritref_node(docutils.nodes.General, docutils.nodes.Element): pass
 
 
 def slugify(text):                                                             
@@ -30,17 +58,18 @@ def slugify(text):
     text = unicode(re.sub('[^\w\s-]', '', text).strip().lower())              
     return re.sub('[-\s]+', '_', text)
 
+
 def get_node_type(node):
     return str(type(node)).split('.')[-1].rstrip("'>")
 
-existing_ids = set()
 
-def create_id(node):
+def generate_inheritref(node):
     found = False
     value = node.astext()
     value = value.replace('[+id]', '')
     value = value.strip()
     node_type = get_node_type(node)
+    inherit_types.add(node_type)
     source = node.document and node.document.attributes['source'] or ''
     splitted = source.split(os.path.sep)
     if len(splitted) >= 2:
@@ -80,27 +109,7 @@ def create_id(node):
     return identifier
 
 
-
-def check_module(app, docname, text):
-    modules = app.config.inheritance_modules
-    if isinstance(modules, (str, unicode)):
-        modules = [x.strip() for x in modules.split(',')]
-    path = os.path.split(docname)
-    if len(path) == 1:
-        return
-    module = path[-2]
-    if not module:
-        return
-    if module not in modules:
-        # If the module is not in the list of installed 
-        # modules set as if the document was empty.
-        text[0] = ''
-
-inherits = {}
-
-
 class Replacer(Transform):
-
     default_priority = 1000
 
     def apply(self):
@@ -131,8 +140,8 @@ class Replacer(Transform):
                 source = (node.document and node.document.attributes['source'] 
                     or '')
                 try:
-                    id, position, refsource, reftype, refid = (
-                        refdata.split(':'))
+                    position, refsource, reftype, refid = \
+                            refdata.split(':')
                 except ValueError:
                     raise ValueError('Invalid inheritance ref "%s" at %s:%s' % (
                             refdata, source, node.line))
@@ -146,6 +155,9 @@ class Replacer(Transform):
                     'line': node.line,
                     }
                 inherits.setdefault(ref, []).append(current_inherit_vals)
+                if config.verbose:
+                    sys.stderr.write("Putting in inherits '%s' from file %s\n"
+                            % (ref, source))
                 if parent:
                     parent.replace(node, [])
                 continue
@@ -163,11 +175,191 @@ class Replacer(Transform):
                         continue
                 current_inherit_vals['nodes'].append(node)
 
+
+class InheritRef(Directive):
+    has_content = True
+    #required_arguments = 0
+    #optional_arguments = 1
+    #final_argument_witespace = False
+    #option_spec = {
+    #    'hola': directives.unchanged_reuired,
+    #    }
+
+    def run(self):
+        #env = self.state.document.settings.env
+        config = self.state.document.settings.env.config
+        reference_pattern = config.inheritance_reference_pattern
+        if isinstance(reference_pattern, basestring):
+            reference_pattern = re.compile(reference_pattern)
+
+        if not self.content or not self.content[0]:
+            raise Exception("ERROR: 'inheritref' directive requires content: "
+                    "'%s'" % self.content)
+        ref = self.content[0]
+        ref_match = reference_pattern.match(ref)
+        if not ref_match:
+            raise Exception("ERROR: invalid inheritref '%s'. It doesn't have "
+                    "the expected format: PREFIX:NODE_TYPE:IDENTIFIER" % ref)
+        nodetype = ref_match.groupdict().get('nodetype', '')
+        if nodetype not in SUPORTED_NODETYPES:
+            raise Exception("ERROR: invalid inheritref '%s'. The node type "
+                    "'%s' is not supported" % (ref, nodetype))
+        if ref in existing_ids:
+            raise Exception("ERROR: explicit inheritref '%s' is defined more "
+                    "than one times." % ref)
+        existing_ids.add(ref)
+        if len(self.content) > 1:
+            sys.stderr.write("WARNING: Unexpected extra content in directive "
+                    "'inheritref' with ref '%s'\n" % ref)
+        inheritref = inheritref_node('')
+        inheritref['inheritref'] = ref
+        inheritref['inheritnodetype'] = nodetype
+        if config.verbose and nodetype == 'toctree':
+            source = (self.state.document.attributes['source'] or '')
+            sys.stderr.write("DEBUG: toctree node %s in file %s. Exists in "
+                    "inheritance dict? %s.\n" % (ref, source, ref in inherits))
+        return [inheritref]
+
+
 def init_transformer(app):
     if app.config.inheritance_plaintext:
         app.add_transform(Replacer)
 
+
+def check_module(app, docname, text):
+    modules = app.config.inheritance_modules
+    if isinstance(modules, (str, unicode)):
+        modules = [x.strip() for x in modules.split(',')]
+    path = os.path.split(docname)
+    if len(path) == 1:
+        return
+    module = path[-2]
+    if not module:
+        return
+    if module not in modules:
+        # If the module is not in the list of installed 
+        # modules set as if the document was empty.
+        text[0] = ''
+
+
+def __search_inherited_node(curr_node, config):
+    assert isinstance(curr_node, inheritref_node), "Unexpected type of " \
+            "curr_node: %s." % type(curr_node)
+    ref = curr_node['inheritref']
+    inherited_node_type = curr_node['inheritnodetype']
+    if ref not in inherits:
+        if config.inheritance_debug:
+            sys.stderr.write("DEBUG: ref '%s' found in inheritref directive "
+                    "doesn't have any inheritance.\n" % ref)
+        return None
+    node_index = curr_node.parent.index(curr_node)
+    # Get next node in doctree. If 'inheritref' node is the last in current
+    # "parent" (typically; section) it search in next parent brother
+    while (curr_node.parent and
+            (len(curr_node.parent) - 1) == node_index):
+        curr_node = curr_node.parent
+        node_index = curr_node.parent.index(curr_node)
+    if not curr_node.parent:
+        raise Exception("ERROR: inheritref node '%s' doesn't "
+                "have any next node." % ref)
+    next_node = curr_node.parent[node_index + 1]
+    if config.verbose:
+        sys.stderr.write("DEBUG: next_node: %s. Now, I'll try to get "
+                "traverse:\n" % next_node)
+    for tnode in next_node.traverse():
+        if tnode.tagname == inherited_node_type:
+            if config.verbose:
+                sys.stderr.write("  - %s. This is the inherited node\n"
+                        % tnode)
+            return tnode
+        if config.verbose:
+            sys.stderr.write("  - %s.\n" % tnode)
+        if tnode.tagname == 'inheritref_node':
+            raise Exception("Found unexpected inheritref node before found "
+                    "the inherited node of previous inheritref: %s" % tnode)
+    if config.verbose:
+        sys.stderr.write("  END traverse next_node.\n")
+    return next_node
+
+
+def search_inheritances(app, doctree):
+    if not doctree:
+        return
+    if not app.config.inheritance_autoreferences:
+        for node in doctree.traverse(inheritref_node):
+            inherit_node = __search_inherited_node(node, app.config)
+            if inherit_node:
+                apply_inheritance(app, [node, inherit_node],
+                        node['inheritref'])
+        return
+    # no autoreferences
+    for node in doctree.traverse():
+        if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
+            continue
+        #text = node.astext()
+        #source = node.document and node.document.attributes['source'] or ''
+        inheritref = generate_inheritref(node)
+        if inheritref in inherits:
+            apply_inheritance(app, [node], inheritref)
+    return
+
+
+def apply_inheritance(app, node_list, inheritref):
+    for n in node_list:
+        if isinstance(n, (docutils.nodes.Inline, docutils.nodes.Text)):
+            sys.stderr.write("WARNING: Inheritance to an unsuported Inline or "
+                    "Text node. Ignored.\n")
+            # if debug, more info
+            return
+    for inherit_vals in inherits.get(inheritref, []):
+        # aquest debug falla
+        position = inherit_vals['position']
+        inherit_nodes = inherit_vals['nodes']
+        for inherit_toctree in inherit_nodes:
+            search_inheritances(app, inherit_toctree)
+        if position == u'after':
+            node_list[-1].replace_self([node_list[-1]] + inherit_nodes)
+        elif position == u'before':
+            node_list[0].replace_self(inherit_nodes + node_list[0])
+        inherit_vals['replaced'] += 1
+    return
+
+
+def replace_inheritances(app, doctree, fromdocname):
+    search_inheritances(app, doctree)
+    # regenerate the ToC of each page.
+    # TODO: it could be improved generating only for modified pages in
+    # inheritance
+    if app.conf.verbose:
+        sys.stderr.write("Calling build_toc_from(fromdocname=%s)\n"
+                % fromdocname)
+    app.builder.env.build_toc_from(fromdocname, doctree)
+    return
+    modules = [m for m in app.config.inheritance_modules if m != 'trytond_doc']
+    if fromdocname == 'index' or fromdocname.split('/')[0] in modules:
+        if app.conf.verbose:
+            sys.stderr.write("waiting to generate '%s' later\n" % fromdocname)
+        doctree_pages[fromdocname] = doctree
+
+
+def create_inheritref_target(app, inheritref):
+    node_list = [
+        docutils.nodes.target('', '', ids=[inheritref]),
+        ]
+    if app.config.inheritance_debug:
+        abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]', 
+            explanation=inheritref)
+        node_list.append(abbrnode)
+    return node_list
+
+
 def add_references(app, doctree, fromdocname):
+    if not app.config.inheritance_autoreferences:
+        for node in doctree.traverse(inheritref_node):
+            targetref = node['inheritref']
+            node_list = create_inheritref_target(app, targetref)
+            node.replace_self(node_list)
+        return
     for node in doctree.traverse():
         if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
             # We do not want to consider inline nodes such as emphasis, 
@@ -177,68 +369,57 @@ def add_references(app, doctree, fromdocname):
             continue
         if not node.parent:
             continue
-
-        targetid = create_id(node)
-        node_list = []
-        node_list.append(docutils.nodes.target('', '', ids=[targetid]))
-        if app.config.inheritance_debug:
-            abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]', 
-                explanation=targetid)
-            node_list.append(abbrnode)
+        if isinstance(node, inheritref_node):
+            # to be safe. previously it must to be detected
+            if app.config.inheritance_debug:
+                sys.stderr.write("WARNING: Found 'inheritref' directive but "
+                        "'inheritance_autoreferences' option is True. "
+                        "Ignored.\n")
+            node.replace_self([])
+            continue
+        targetref = generate_inheritref(node)
+        node_list = create_inheritref_target(app, targetref)
         node_list.append(node)
-        node.parent.replace(node, node_list)
+        node.replace_self(node_list)
+    return
 
-def apply_inheritance(app, node):
-    if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
-        return
-    parent = node.parent
-    #text = node.astext()
-    #source = node.document and node.document.attributes['source'] or ''
-    id = create_id(node)
-    for inherit_vals in inherits.get(id, []):
-        # aquest debug falla
-        position = inherit_vals['position']
-        nodes = inherit_vals['nodes']
-        for n in nodes:
-            for sn in n.traverse():
-                apply_inheritance(app, sn)
-        if position == u'after':
-            nodes.insert(0, node)
-        elif position == u'before':
-            nodes.append(node)
-        # aquest debug falla
-        parent.replace(node, nodes)
-        inherit_vals['replaced'] += 1
-
-def replace_inheritances(app, doctree, fromdocname):
-    for node in doctree.traverse():
-        apply_inheritance(app, node)
-    # regenerate the ToC of each page.
-    # TODO: it could be improved generating only for modified pages in
-    # inheritance
-    app.builder.env.build_toc_from(fromdocname, doctree)
 
 def report_warnings(app, exception):
+    if app.config.verbose and inherit_types:
+        sys.stderr.write("Used inherit types:\n - %s\n"
+                % "\n - ".join(inherit_types))
+    if not app.config.inheritance_debug:
+        return
     for key, value_list in inherits.iteritems():
         for values in value_list:
             if not values['replaced']:
                 sys.stderr.write("%s:%s:: WARNING: Inheritance ref '%s' not "
                         "found.\n" % (values['source'], values['line'], key))
                 continue
-            if app.config.inheritance_debug:
-                sys.stderr.write('%s:%s:: "%s" was replaced %d times.\n'
-                        % (values['source'], values['line'], key,
-                            values['replaced']))
+            sys.stderr.write('%s:%s:: "%s" was replaced %d times.\n'
+                    % (values['source'], values['line'], key,
+                        values['replaced']))
+
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
-    app.add_config_value('inheritance_pattern', re.compile(r'#(.|[^#]+)#'), 
-        'env')
+    app.add_config_value('inheritance_pattern', re.compile(r'#:(.|[^#]+)#'), 
+            'env')
+    app.add_config_value('inheritance_reference_pattern',
+            re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z]+):'
+                    '(?P<identifier>[a-zA-Z]+)'), 'env')
     app.add_config_value('inheritance_modules', [], 'env')
+    app.add_config_value('inheritance_autoreferences', False, 'env')
     app.add_config_value('inheritance_debug', False, 'env'), 
+    app.add_config_value('verbose', False, 'env'), 
+
+    app.add_node(inheritref_node)
+
+    app.add_directive('inheritref', InheritRef)
 
     app.connect(b'builder-inited', init_transformer)
     app.connect(b'source-read', check_module)
     app.connect(b'doctree-resolved', replace_inheritances)
     app.connect(b'doctree-resolved', add_references)
     app.connect(b'build-finished', report_warnings)
+
