@@ -325,14 +325,14 @@ def replace_inheritances(app, doctree, fromdocname):
     # regenerate the ToC of each page.
     # TODO: it could be improved generating only for modified pages in
     # inheritance
-    if app.conf.verbose:
+    if app.config.verbose:
         sys.stderr.write("Calling build_toc_from(fromdocname=%s)\n"
                 % fromdocname)
     app.builder.env.build_toc_from(fromdocname, doctree)
     return
     modules = [m for m in app.config.inheritance_modules if m != 'trytond_doc']
     if fromdocname == 'index' or fromdocname.split('/')[0] in modules:
-        if app.conf.verbose:
+        if app.config.verbose:
             sys.stderr.write("waiting to generate '%s' later\n" % fromdocname)
         doctree_pages[fromdocname] = doctree
 
