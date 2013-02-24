@@ -1,1 +1,8 @@
+Version 0.4 - 2013-02-25
+* Support of multiple inheritance over the same inherit reference.
+* Regenerate ToC of pages after apply inheritance.
+* Support of explicit inherit references.
+
+Version 0.3 and previous
 * Initial release
+

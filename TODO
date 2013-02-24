@@ -2,3 +2,7 @@
   Currently it is only possible to add a new bullet list which adds a space 
   between the existing and the new one (by doing :after:*:bulletlist:) or add a 
   subitem of a existing item in the list (by doing :after:*:list_item).
+- Allow adding entries in a toctree directive as if the entries where in the
+  original declaration.
+- Fix (or extend) the toctree directive to support inheritance. Provably it
+  could be done regenerating inline toctree after apply inheritance.
