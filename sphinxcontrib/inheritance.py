@@ -16,11 +16,6 @@ import docutils.nodes
 import sphinx
 from docutils.parsers.rst import Directive
 from docutils.transforms import Transform
-from sphinx import addnodes
-#from sphinx.locale import _
-#from sphinx.environment import NoUri
-#from sphinx.util.compat import Directive
-#from docutils.parsers.rst import directives, states
 
 SUPORTED_NODETYPES = [
 #    'document',
@@ -34,7 +29,7 @@ SUPORTED_NODETYPES = [
     'warning',
     'important',
     'bullet_list',
-    'list_item',
+#    'list_item',
     'figure',
 #    'caption',
     'toctree',
