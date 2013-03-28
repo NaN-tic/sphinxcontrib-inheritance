@@ -315,7 +315,7 @@ def apply_inheritance(app, node_list, inheritref):
         if position == u'after':
             node_list[-1].replace_self([node_list[-1]] + inherit_nodes)
         elif position == u'before':
-            node_list[0].replace_self(inherit_nodes + node_list[0])
+            node_list[0].replace_self(inherit_nodes + [node_list[0]])
         inherit_vals['replaced'] += 1
     return
 
