@@ -117,6 +117,16 @@ class Replacer(Transform):
         for node in self.document.traverse():
             if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
                 continue
+            if (isinstance(node, inheritref_node) and
+                    node['inheritnodetype'] == 'section'):
+                # inheritref node introduced by inheritref directive is
+                # introduced in a wrong position when nodetype is 'section';
+                # it's introduced as child of previous section when it must to
+                # be introduced as brother
+                node.parent.replace(node, [])
+                node.parent.replace_self([node.parent, node])
+                continue
+
             parent = node.parent
             text = node.astext()
             match = pattern.search(text)
@@ -135,14 +145,15 @@ class Replacer(Transform):
                 source = (node.document and node.document.attributes['source'] 
                     or '')
                 try:
-                    position, refsource, reftype, refid = \
+                    position, refsource, nodetype, refid = \
                             refdata.split(':')
                 except ValueError:
                     raise ValueError('Invalid inheritance ref "%s" at %s:%s' % (
                             refdata, source, node.line))
-                ref = '%s:%s:%s' % (refsource, reftype, refid)
+                ref = '%s:%s:%s' % (refsource, nodetype, refid)
                 current_inherit_ref = ref
                 current_inherit_vals = {
+                    'nodetype': nodetype,
                     'position': position,
                     'nodes': [],
                     'replaced': 0,
