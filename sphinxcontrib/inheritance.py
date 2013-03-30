@@ -426,7 +426,7 @@ def report_warnings(app, exception):
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
-    app.add_config_value('inheritance_pattern', re.compile(r'#:(.|[^#]+)#'), 
+    app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'), 
             'env')
     app.add_config_value('inheritance_reference_pattern',
             re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z]+):'
