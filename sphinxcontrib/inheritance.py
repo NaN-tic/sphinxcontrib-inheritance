@@ -17,25 +17,25 @@ import sphinx
 from docutils.parsers.rst import Directive
 from docutils.transforms import Transform
 
-SUPORTED_NODETYPES = [
+SUPORTED_NODETYPES_POSITIONS = {
 #    'document',
-    'section',
-    'title',
-    'paragraph',
-    'block_quote',
-    'literal_block',
-    'note',
-    'tip',
-    'warning',
-    'important',
-    'bullet_list',
+    'section': ['before', 'after'],
+    'title': ['after'],
+    'paragraph': ['before', 'after'],
+    'block_quote': ['before', 'after'],
+    'literal_block': ['before', 'after'],
+    'note': ['before', 'after'],
+    'tip': ['before', 'after'],
+    'warning': ['before', 'after'],
+    'important': ['before', 'after'],
+    'bullet_list': ['before', 'after'],
 #    'list_item',
-    'figure',
+    'figure': ['before', 'after'],
 #    'caption',
-    'toctree',
+    'toctree': ['before', 'after'],
 #    'compound',
-    'comment',
-    ]
+    'comment': ['before', 'after'],
+    }
 
 existing_ids = set()
 inherits = {}
@@ -104,8 +104,92 @@ def generate_inheritref(node):
     return identifier
 
 
+class InheritRef(Directive):
+    has_content = True
+    #required_arguments = 0
+    #optional_arguments = 1
+    #final_argument_witespace = False
+    #option_spec = {
+    #    'hola': directives.unchanged_required,
+    #    }
+
+    def run(self):
+        #env = self.state.document.settings.env
+        config = self.state.document.settings.env.config
+        reference_pattern = config.inheritance_reference_pattern
+        if isinstance(reference_pattern, basestring):
+            reference_pattern = re.compile(reference_pattern)
+
+        if not self.content or not self.content[0]:
+            raise Exception("ERROR: 'inheritref' directive requires content: "
+                    "'%s'" % self.content)
+        ref = self.content[0]
+        ref_match = reference_pattern.match(ref)
+        if not ref_match:
+            raise Exception("ERROR: invalid inheritref '%s'. It doesn't have "
+                    "the expected format: PREFIX:NODE_TYPE:IDENTIFIER" % ref)
+        nodetype = ref_match.groupdict().get('nodetype', '')
+        if nodetype not in SUPORTED_NODETYPES_POSITIONS:
+            raise Exception("ERROR: invalid inheritref '%s'. The node type "
+                    "'%s' is not supported" % (ref, nodetype))
+        if ref in existing_ids:
+            raise Exception("ERROR: explicit inheritref '%s' is defined more "
+                    "than one times." % ref)
+        existing_ids.add(ref)
+        if len(self.content) > 1:
+            sys.stderr.write("WARNING: Unexpected extra content in directive "
+                    "'inheritref' with ref '%s'\n" % ref)
+        inheritref = inheritref_node('')
+        inheritref['inheritref'] = ref
+        inheritref['inheritnodetype'] = nodetype
+        if config.verbose and nodetype == 'toctree':
+            source = (self.state.document.attributes['source'] or '')
+            sys.stderr.write("DEBUG: toctree node %s in file %s. Exists in "
+                    "inheritance dict? %s.\n" % (ref, source, ref in inherits))
+        return [inheritref]
+
+
 class Replacer(Transform):
     default_priority = 1000
+
+    @classmethod
+    def _search_inherited_node(cls, curr_node, config):
+        assert isinstance(curr_node, inheritref_node), "Unexpected type of " \
+                "curr_node: %s (%s). cls: %s" % (curr_node, type(curr_node), cls)
+        ref = curr_node['inheritref']
+        inherited_node_type = curr_node['inheritnodetype']
+        node_index = curr_node.parent.index(curr_node)
+        # Get next node in doctree. If 'inheritref' node is the last in current
+        # "parent" (typically; section) it search in next parent brother
+        while (curr_node.parent and
+                (len(curr_node.parent) - 1) == node_index):
+            curr_node = curr_node.parent
+            node_index = curr_node.parent.index(curr_node)
+        if not curr_node.parent:
+            raise Exception("ERROR: inheritref node '%s' doesn't "
+                    "have any next node." % ref)
+        next_node = curr_node.parent[node_index + 1]
+        if config.verbose:
+            sys.stderr.write("DEBUG: next_node: %s. Now, I'll try to get "
+                    "traverse:\n" % next_node)
+        for tnode in next_node.traverse():
+            if tnode.tagname == inherited_node_type:
+                if config.verbose:
+                    sys.stderr.write("  - %s. This is the inherited node\n"
+                            % tnode)
+                return tnode
+            if config.verbose:
+                sys.stderr.write("  - %s.\n" % tnode)
+            if tnode.tagname == 'inheritref_node':
+                raise Exception("Found unexpected inheritref node before found "
+                        "the inherited node of previous inheritref: %s" % tnode)
+        if config.verbose:
+            sys.stderr.write("  END traverse next_node.\n")
+        if next_node.tagname == inherited_node_type:
+            return next_node
+        raise Exception("Invalid inheritref definition '%s'. The type of "
+                "inherited node found is not the expected: %s"
+                        % (ref, next_node.tagname))
 
     def apply(self):
         config = self.document.settings.env.config
@@ -117,14 +201,19 @@ class Replacer(Transform):
         for node in self.document.traverse():
             if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
                 continue
-            if (isinstance(node, inheritref_node) and
-                    node['inheritnodetype'] == 'section'):
+            if isinstance(node, inheritref_node):
+                inherit_node = Replacer._search_inherited_node(node, config)
+                inherit_node_type = node['inheritnodetype']
+                node['inheritnode'] = inherit_node
+                if (inherit_node_type not in ('section', 'title') or
+                        node.parent.index(node) <= 1):
+                    continue
                 # inheritref node introduced by inheritref directive is
-                # introduced in a wrong position when nodetype is 'section';
-                # it's introduced as child of previous section when it must to
-                # be introduced as brother
+                # introduced in a wrong position when nodetype is 'section' or
+                # title; it's introduced as child of previous section when it
+                # as previous simbling node respect inherited node
                 node.parent.replace(node, [])
-                node.parent.replace_self([node.parent, node])
+                inherit_node.replace_self([node, inherit_node])
                 continue
 
             parent = node.parent
@@ -148,8 +237,17 @@ class Replacer(Transform):
                     position, refsource, nodetype, refid = \
                             refdata.split(':')
                 except ValueError:
-                    raise ValueError('Invalid inheritance ref "%s" at %s:%s' % (
-                            refdata, source, node.line))
+                    raise ValueError('Invalid inheritance ref "%s" at %s:%s'
+                            % (refdata, source, node.line))
+                if nodetype not in SUPORTED_NODETYPES_POSITIONS:
+                    raise Exception('ERROR: Invalid inheritance ref "%s" at '
+                            '%s:%s. The node type "%s" is not supported'
+                                    % (refdata, source, node.line, nodetype))
+                if position not in SUPORTED_NODETYPES_POSITIONS[nodetype]:
+                    raise Exception('ERROR: Invalid inheritance ref "%s" at '
+                            '%s:%s. The position "%s" is not supported for '
+                            'node types "%s"' % (refdata, source, node.line,
+                                position, nodetype))
                 ref = '%s:%s:%s' % (refsource, nodetype, refid)
                 current_inherit_ref = ref
                 current_inherit_vals = {
@@ -182,51 +280,6 @@ class Replacer(Transform):
                 current_inherit_vals['nodes'].append(node)
 
 
-class InheritRef(Directive):
-    has_content = True
-    #required_arguments = 0
-    #optional_arguments = 1
-    #final_argument_witespace = False
-    #option_spec = {
-    #    'hola': directives.unchanged_reuired,
-    #    }
-
-    def run(self):
-        #env = self.state.document.settings.env
-        config = self.state.document.settings.env.config
-        reference_pattern = config.inheritance_reference_pattern
-        if isinstance(reference_pattern, basestring):
-            reference_pattern = re.compile(reference_pattern)
-
-        if not self.content or not self.content[0]:
-            raise Exception("ERROR: 'inheritref' directive requires content: "
-                    "'%s'" % self.content)
-        ref = self.content[0]
-        ref_match = reference_pattern.match(ref)
-        if not ref_match:
-            raise Exception("ERROR: invalid inheritref '%s'. It doesn't have "
-                    "the expected format: PREFIX:NODE_TYPE:IDENTIFIER" % ref)
-        nodetype = ref_match.groupdict().get('nodetype', '')
-        if nodetype not in SUPORTED_NODETYPES:
-            raise Exception("ERROR: invalid inheritref '%s'. The node type "
-                    "'%s' is not supported" % (ref, nodetype))
-        if ref in existing_ids:
-            raise Exception("ERROR: explicit inheritref '%s' is defined more "
-                    "than one times." % ref)
-        existing_ids.add(ref)
-        if len(self.content) > 1:
-            sys.stderr.write("WARNING: Unexpected extra content in directive "
-                    "'inheritref' with ref '%s'\n" % ref)
-        inheritref = inheritref_node('')
-        inheritref['inheritref'] = ref
-        inheritref['inheritnodetype'] = nodetype
-        if config.verbose and nodetype == 'toctree':
-            source = (self.state.document.attributes['source'] or '')
-            sys.stderr.write("DEBUG: toctree node %s in file %s. Exists in "
-                    "inheritance dict? %s.\n" % (ref, source, ref in inherits))
-        return [inheritref]
-
-
 def init_transformer(app):
     if app.config.inheritance_plaintext:
         app.add_transform(Replacer)
@@ -248,55 +301,19 @@ def check_module(app, docname, text):
         text[0] = ''
 
 
-def __search_inherited_node(curr_node, config):
-    assert isinstance(curr_node, inheritref_node), "Unexpected type of " \
-            "curr_node: %s." % type(curr_node)
-    ref = curr_node['inheritref']
-    inherited_node_type = curr_node['inheritnodetype']
-    if ref not in inherits:
-        if config.inheritance_debug:
-            sys.stderr.write("DEBUG: ref '%s' found in inheritref directive "
-                    "doesn't have any inheritance.\n" % ref)
-        return None
-    node_index = curr_node.parent.index(curr_node)
-    # Get next node in doctree. If 'inheritref' node is the last in current
-    # "parent" (typically; section) it search in next parent brother
-    while (curr_node.parent and
-            (len(curr_node.parent) - 1) == node_index):
-        curr_node = curr_node.parent
-        node_index = curr_node.parent.index(curr_node)
-    if not curr_node.parent:
-        raise Exception("ERROR: inheritref node '%s' doesn't "
-                "have any next node." % ref)
-    next_node = curr_node.parent[node_index + 1]
-    if config.verbose:
-        sys.stderr.write("DEBUG: next_node: %s. Now, I'll try to get "
-                "traverse:\n" % next_node)
-    for tnode in next_node.traverse():
-        if tnode.tagname == inherited_node_type:
-            if config.verbose:
-                sys.stderr.write("  - %s. This is the inherited node\n"
-                        % tnode)
-            return tnode
-        if config.verbose:
-            sys.stderr.write("  - %s.\n" % tnode)
-        if tnode.tagname == 'inheritref_node':
-            raise Exception("Found unexpected inheritref node before found "
-                    "the inherited node of previous inheritref: %s" % tnode)
-    if config.verbose:
-        sys.stderr.write("  END traverse next_node.\n")
-    return next_node
-
-
 def search_inheritances(app, doctree):
     if not doctree:
         return
     if not app.config.inheritance_autoreferences:
         for node in doctree.traverse(inheritref_node):
-            inherit_node = __search_inherited_node(node, app.config)
-            if inherit_node:
-                apply_inheritance(app, [node, inherit_node],
-                        node['inheritref'])
+            inherit_node = node['inheritnode']
+            if node['inheritref'] not in inherits:
+                if app.config.inheritance_debug:
+                    sys.stderr.write("DEBUG: ref '%s' found in inheritref "
+                            "directive doesn't have any inheritance.\n"
+                                    % node['inheritref'])
+                continue
+            apply_inheritance(app, [node, inherit_node], node['inheritref'])
         return
     # no autoreferences
     for node in doctree.traverse():
