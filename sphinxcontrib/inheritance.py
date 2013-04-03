@@ -8,6 +8,7 @@
 """
 
 import os
+import pprint
 import re
 import sys
 import unicodedata
@@ -19,7 +20,7 @@ from docutils.transforms import Transform
 
 SUPORTED_NODETYPES_POSITIONS = {
 #    'document',
-    'section': ['before', 'after'],
+    'section': ['before', 'after', 'inside'],
     'title': ['after'],
     'paragraph': ['before', 'after'],
     'block_quote': ['before', 'after'],
@@ -28,11 +29,11 @@ SUPORTED_NODETYPES_POSITIONS = {
     'tip': ['before', 'after'],
     'warning': ['before', 'after'],
     'important': ['before', 'after'],
-    'bullet_list': ['before', 'after'],
+    'bullet_list': ['before', 'after', 'inside'],
 #    'list_item',
     'figure': ['before', 'after'],
 #    'caption',
-    'toctree': ['before', 'after'],
+    'toctree': ['before', 'after', 'inside'],
 #    'compound',
     'comment': ['before', 'after'],
     }
@@ -198,6 +199,7 @@ class Replacer(Transform):
             pattern = re.compile(pattern)
 
         current_inherit_ref = None
+        current_inherit_vals = None
         for node in self.document.traverse():
             if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
                 continue
@@ -227,6 +229,10 @@ class Replacer(Transform):
                     raise ValueError(
                         'inherit_issue_pattern must have '
                         'exactly one group: {0!r}'.format(match.groups()))
+
+                if current_inherit_ref is not None:
+                    self._check_inherit_vals(current_inherit_ref,
+                            current_inherit_vals)
 
                 # extract the reference data (excluding the leading dash)
                 refdata = match.group(1)
@@ -278,6 +284,44 @@ class Replacer(Transform):
                     if found:
                         continue
                 current_inherit_vals['nodes'].append(node)
+        if current_inherit_ref is not None:
+            self._check_inherit_vals(current_inherit_ref, current_inherit_vals)
+
+    def _check_inherit_vals(self, inherit_ref, inherit_vals):
+        config = self.document.settings.env.config
+        def get_and_check_size_type(position, nodetype, node_list, min_size,
+                max_size, nodetype_1st_node):
+            assert ((min_size is None or len(node_list) >= min_size) and
+                    (max_size is None or len(node_list) <= max_size)), \
+                    "Unexpected inheritance nodes list size in '%s' '%s' " \
+                    "inheritance '%s': %s\n    %s\n" % (position, nodetype,
+                            inherit_ref, len(node_list), node_list)
+            if len(node_list) < 1:
+                return None
+            assert isinstance(node_list[0], nodetype_1st_node), \
+                    "Unexpected type of inheritance node in '%s' '%s' " \
+                    "inheritance (%s): %s\n" % (position, nodetype,
+                            inherit_ref, type(node_list))
+            return node_list[0]
+
+        if (inherit_vals['position'] == 'inside' and
+                inherit_vals['nodetype'] == 'toctree'):
+            inh_node = get_and_check_size_type('inside', 'toctree',
+                    inherit_vals['nodes'], 1, 1, docutils.nodes.compound)
+            inh_node = get_and_check_size_type('inside', 'toctree',
+                    inh_node.children, 1, 1, sphinx.addnodes.toctree)
+            inherit_vals['nodes'] = [inh_node]
+        elif (inherit_vals['position'] == 'inside' and
+                inherit_vals['nodetype'] == 'bullet_list'):
+            if config.verbose:
+                sys.stderr.write("inherit_vals bullet_list: %s\n" %
+                        pprint.pformat(inherit_vals, indent=2))
+            inh_node = get_and_check_size_type('inside', 'bullet_list',
+                    inherit_vals['nodes'], 1, None, docutils.nodes.bullet_list)
+            if config.verbose:
+                sys.stderr.write("inh_node bullet_list: %s\nchildren: %s\n"
+                        % (inh_node, inh_node.children))
+        return
 
 
 def init_transformer(app):
@@ -344,6 +388,34 @@ def apply_inheritance(app, node_list, inheritref):
             node_list[-1].replace_self([node_list[-1]] + inherit_nodes)
         elif position == u'before':
             node_list[0].replace_self(inherit_nodes + [node_list[0]])
+        elif position == u'inside':
+            if inherit_vals['nodetype'] == 'toctree':
+                if app.config.verbose:
+                    sys.stderr.write("inherit_nodes of 'inside' 'toctree': "
+                            "%s\nnode_list: %s\n" % (inherit_nodes[0],
+                                    node_list[1]))
+                    sys.stderr.write("inherit_nodes['entries'] of 'inside' "
+                            "'toctree': %s\nnode_list['entries']: %s\n" % (
+                                    inherit_nodes[0]['entries'],
+                                    node_list[1]['entries']))
+                node_list[1]['entries'].extend(inherit_nodes[0]['entries'])
+                node_list[1]['includefiles'].extend(
+                        inherit_nodes[0]['includefiles'])
+            elif inherit_vals['nodetype'] == 'bullet_list':
+                if app.config.verbose:
+                    sys.stderr.write("inherit_nodes of 'inside' 'bullet_list':"
+                            " %s\nnode_list: %s\n" % (inherit_nodes[0],
+                                    node_list[1]))
+                    sys.stderr.write("inherit_nodes.children of 'inside' "
+                            "'bullet_list': %s\nnode_list.children: %s\n"
+                                    % (inherit_nodes[0].children,
+                                            node_list[1].children))
+                node_list[1].extend(inherit_nodes[0].children)
+                if len(inherit_nodes) > 1:
+                    node_list[-1].replace_self([node_list[-1]] +
+                            inherit_nodes[1:])
+            else:
+                node_list[-1].extend(inherit_nodes)
         inherit_vals['replaced'] += 1
     return
 
@@ -429,7 +501,7 @@ def setup(app):
     app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'), 
             'env')
     app.add_config_value('inheritance_reference_pattern',
-            re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z]+):'
+            re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z_]+):'
                     '(?P<identifier>[a-zA-Z]+)'), 'env')
     app.add_config_value('inheritance_modules', [], 'env')
     app.add_config_value('inheritance_autoreferences', False, 'env')

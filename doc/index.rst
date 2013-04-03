@@ -77,9 +77,11 @@ The inherit reference consist in four parameters separated by ':'. First one is
 the **position** which indicates how the current text will be included in the
 base document. Possible positions accepted by the extension are:
 
-* *after* which adds the supplied node after the referenced one
-* *before* which adds the supplied node before the referenced one
-* *replace* which replaces the referenced node with the text provided.
+* *after* which adds the supplied content after the referenced node
+* *before* which adds the supplied content before the referenced node
+* *replace* (not implemented yet) which replaces the referenced node with the
+  supplied content.
+* *inside* which append the supplied content to the referenced node's content
 
 The second parameter references the **inherited source file** where is the
 referenced node and the file should have the '.rst' extension removed.
@@ -159,6 +161,20 @@ There are two ways of knowing this ID:
   will display a tooltip on hover with the type of element (such as Paragraph,
   Title or Section) followed by the identifier. Note that this approach is only
   valid for HTML output.
+
+
+Restrictions in position usage
+******************************
+
+There are some combinations of inherited node type and position. *after*,
+*before* and *replace* are allowed for all node types except *before*, which
+can't be used with *title* node type (it doesn't make sense insert content
+before the **title** node which is always the first node of a *section*).
+
+The *inside* position is allowed only for node types *section* (append any
+content at the end of section's content) and *bullet_list* or *toctree* (the
+inheritance content must to be also a **bullet_list** or *toctree* respectively
+and it will append its items to the inherited list).
 
 
 Tips
