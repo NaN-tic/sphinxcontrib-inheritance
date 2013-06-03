@@ -1,3 +1,9 @@
+Version 0.5 - 2013-06-04
+* Fix #2: inherit two modules at same inheritref
+* Fix node generation for 'title' and 'section' inheritref node types.
+* Fix #3: fixed default inheritance_pattern expression to support well multiple
+  inheritances in the same file and to allow '_' in the prefix of inheritance
+
 Version 0.4 - 2013-02-25
 * Support of multiple inheritance over the same inherit reference.
 * Regenerate ToC of pages after apply inheritance.
