@@ -16,7 +16,7 @@ This extension can be installed from the Python Package Index::
 Alternatively, you can clone the inheritance repository from BitBucket,
 and install the extension directly from the repository::
 
-  hg clone https://bitbucket.org/albertnan/sphinxcontrib-inheritance
+  hg clone https://bitbucket.org/nantic/sphinxcontrib-inheritance
   cd sphinxcontrib-inheritance
   python setup.py install
 
