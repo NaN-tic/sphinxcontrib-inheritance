@@ -13,13 +13,13 @@ import re
 import sys
 import unicodedata
 
-import docutils.nodes 
+import docutils.nodes
 import sphinx
 from docutils.parsers.rst import Directive
 from docutils.transforms import Transform
 
 SUPORTED_NODETYPES_POSITIONS = {
-#    'document',
+    #'document',
     'section': ['before', 'after', 'inside'],
     'title': ['after'],
     'paragraph': ['before', 'after'],
@@ -30,11 +30,11 @@ SUPORTED_NODETYPES_POSITIONS = {
     'warning': ['before', 'after'],
     'important': ['before', 'after'],
     'bullet_list': ['before', 'after', 'inside'],
-#    'list_item',
+    #'list_item',
     'figure': ['before', 'after'],
-#    'caption',
+    #'caption',
     'toctree': ['before', 'after', 'inside'],
-#    'compound',
+    #'compound',
     'comment': ['before', 'after'],
     }
 
@@ -44,14 +44,15 @@ doctree_pages = {}
 inherit_types = set()
 
 
-class inheritref_node(docutils.nodes.General, docutils.nodes.Element): pass
+class inheritref_node(docutils.nodes.General, docutils.nodes.Element):
+    pass
 
 
-def slugify(text):                                                             
+def slugify(text):
     if isinstance(text, str):
         text = unicode(text, 'utf-8')
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore')      
-    text = unicode(re.sub('[^\w\s-]', '', text).strip().lower())              
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore')
+    text = unicode(re.sub('[^\w\s-]', '', text).strip().lower())
     return re.sub('[-\s]+', '_', text)
 
 
@@ -75,9 +76,9 @@ def generate_inheritref(node):
     word_count = 7
     while True:
         words = slugify(value)
-        words = words.replace(':','_')
-        words = words.replace('.','_')
-        words = words.replace('_',' ')
+        words = words.replace(':', '_')
+        words = words.replace('.', '_')
+        words = words.replace('_', ' ')
         words = words.split()
         identifier = '_'.join(words[:word_count])
         identifier = '%s:%s:%s' % (prefix, node_type, identifier)
@@ -156,7 +157,8 @@ class Replacer(Transform):
     @classmethod
     def _search_inherited_node(cls, curr_node, config):
         assert isinstance(curr_node, inheritref_node), "Unexpected type of " \
-                "curr_node: %s (%s). cls: %s" % (curr_node, type(curr_node), cls)
+                "curr_node: %s (%s). cls: %s" % (curr_node, type(curr_node),
+                    cls)
         ref = curr_node['inheritref']
         inherited_node_type = curr_node['inheritnodetype']
         node_index = curr_node.parent.index(curr_node)
@@ -182,8 +184,9 @@ class Replacer(Transform):
             if config.verbose:
                 sys.stderr.write("  - %s.\n" % tnode)
             if tnode.tagname == 'inheritref_node':
-                raise Exception("Found unexpected inheritref node before found "
-                        "the inherited node of previous inheritref: %s" % tnode)
+                raise Exception("Found unexpected inheritref node before "
+                    "found the inherited node of previous inheritref: %s"
+                    % tnode)
         if config.verbose:
             sys.stderr.write("  END traverse next_node.\n")
         if next_node.tagname == inherited_node_type:
@@ -237,7 +240,7 @@ class Replacer(Transform):
                 # extract the reference data (excluding the leading dash)
                 refdata = match.group(1)
 
-                source = (node.document and node.document.attributes['source'] 
+                source = (node.document and node.document.attributes['source']
                     or '')
                 try:
                     position, refsource, nodetype, refid = \
@@ -289,6 +292,7 @@ class Replacer(Transform):
 
     def _check_inherit_vals(self, inherit_ref, inherit_vals):
         config = self.document.settings.env.config
+
         def get_and_check_size_type(position, nodetype, node_list, min_size,
                 max_size, nodetype_1st_node):
             assert ((min_size is None or len(node_list) >= min_size) and
@@ -340,7 +344,7 @@ def check_module(app, docname, text):
     if not module:
         return
     if module not in modules:
-        # If the module is not in the list of installed 
+        # If the module is not in the list of installed
         # modules set as if the document was empty.
         text[0] = ''
 
@@ -442,7 +446,7 @@ def create_inheritref_target(app, inheritref):
         docutils.nodes.target('', '', ids=[inheritref]),
         ]
     if app.config.inheritance_debug:
-        abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]', 
+        abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]',
             explanation=inheritref)
         node_list.append(abbrnode)
     return node_list
@@ -457,9 +461,9 @@ def add_references(app, doctree, fromdocname):
         return
     for node in doctree.traverse():
         if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
-            # We do not want to consider inline nodes such as emphasis, 
-            # strong or literal. Nor Text nodes which are the part of the 
-            # paragraph that precede an inline node. There's already the 
+            # We do not want to consider inline nodes such as emphasis,
+            # strong or literal. Nor Text nodes which are the part of the
+            # paragraph that precede an inline node. There's already the
             # Paragraph node and the anchor is added to it.
             continue
         if not node.parent:
@@ -498,15 +502,15 @@ def report_warnings(app, exception):
 
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
-    app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'), 
+    app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'),
             'env')
     app.add_config_value('inheritance_reference_pattern',
             re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z_]+):'
                     '(?P<identifier>[a-zA-Z]+)'), 'env')
     app.add_config_value('inheritance_modules', [], 'env')
     app.add_config_value('inheritance_autoreferences', False, 'env')
-    app.add_config_value('inheritance_debug', False, 'env'), 
-    app.add_config_value('verbose', False, 'env'), 
+    app.add_config_value('inheritance_debug', False, 'env'),
+    app.add_config_value('verbose', False, 'env'),
 
     app.add_node(inheritref_node)
 
@@ -517,4 +521,3 @@ def setup(app):
     app.connect(b'doctree-resolved', replace_inheritances)
     app.connect(b'doctree-resolved', add_references)
     app.connect(b'build-finished', report_warnings)
-
