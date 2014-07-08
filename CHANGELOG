@@ -1,3 +1,11 @@
+Version 0.6 - 2014-07-08
+
+* Fix nested inheritances: inheritance of content in an inheritance
+* Add new node type inheritance_node to improve inheritance management
+  * Allow more information of inheritance (which could be used when HTML is
+    generated)
+  * Better and clear management of inheritances (introduced nodes)
+
 Version 0.5 - 2013-06-04
 * Fix #2: inherit two modules at same inheritref
 * Fix node generation for 'title' and 'section' inheritref node types.
