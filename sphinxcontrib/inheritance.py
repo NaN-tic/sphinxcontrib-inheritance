@@ -12,6 +12,7 @@ import pprint
 import re
 import sys
 import unicodedata
+from path import path
 
 import docutils.nodes
 import sphinx
@@ -19,7 +20,7 @@ from docutils.parsers.rst import Directive
 from docutils.transforms import Transform
 
 SUPORTED_NODETYPES_POSITIONS = {
-    #'document',
+    # 'document',
     'section': ['before', 'after', 'inside'],
     'title': ['after'],
     'paragraph': ['before', 'after'],
@@ -30,11 +31,11 @@ SUPORTED_NODETYPES_POSITIONS = {
     'warning': ['before', 'after'],
     'important': ['before', 'after'],
     'bullet_list': ['before', 'after', 'inside'],
-    #'list_item',
+    # 'list_item',
     'figure': ['before', 'after'],
-    #'caption',
+    # 'caption',
     'toctree': ['before', 'after', 'inside'],
-    #'compound',
+    # 'compound',
     'comment': ['before', 'after'],
     }
 
@@ -48,12 +49,17 @@ class inheritref_node(docutils.nodes.General, docutils.nodes.Element):
     pass
 
 
+class inheritance_node(docutils.nodes.PreBibliographic,
+        docutils.nodes.Structural, docutils.nodes.Element):
+    pass
+
+
 def slugify(text):
     if isinstance(text, str):
         text = unicode(text, 'utf-8')
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore')
-    text = unicode(re.sub('[^\w\s-]', '', text).strip().lower())
-    return re.sub('[-\s]+', '_', text)
+    text = unicode(re.sub(r'[^\w\s-]', '', text).strip().lower())
+    return re.sub(r'[-\s]+', '_', text)
 
 
 def get_node_type(node):
@@ -83,7 +89,7 @@ def generate_inheritref(node):
         identifier = '_'.join(words[:word_count])
         identifier = '%s:%s:%s' % (prefix, node_type, identifier)
 
-        if not identifier in existing_ids:
+        if identifier not in existing_ids:
             found = True
             break
         word_count += 1
@@ -94,7 +100,7 @@ def generate_inheritref(node):
         counter = 1
         while True:
             new_identifier = identifier + '_%d' % counter
-            if not new_identifier in existing_ids:
+            if new_identifier not in existing_ids:
                 identifier = new_identifier
                 break
             counter += 1
@@ -102,21 +108,21 @@ def generate_inheritref(node):
     # TODO: By now we do not want the identifier to change because create_id()
     # is called more than once. We need to find a better solution for creating
     # the paragraph ID.
-    #existing_ids.add(identifier)
+    # existing_ids.add(identifier)
     return identifier
 
 
 class InheritRef(Directive):
     has_content = True
-    #required_arguments = 0
-    #optional_arguments = 1
-    #final_argument_witespace = False
-    #option_spec = {
-    #    'hola': directives.unchanged_required,
-    #    }
+    # required_arguments = 0
+    # optional_arguments = 1
+    # final_argument_witespace = False
+    # option_spec = {
+    #     'hola': directives.unchanged_required,
+    #     }
 
     def run(self):
-        #env = self.state.document.settings.env
+        # env = self.state.document.settings.env
         config = self.state.document.settings.env.config
         reference_pattern = config.inheritance_reference_pattern
         if isinstance(reference_pattern, basestring):
@@ -201,6 +207,26 @@ class Replacer(Transform):
         if isinstance(pattern, basestring):
             pattern = re.compile(pattern)
 
+        def add_to_inherit_vals(inherit_vals, node):
+            if not inherit_vals:
+                return
+            if node.parent:
+                found = False
+                p = node.parent
+                inherit_children = inherit_vals['inheritance_node'].children
+                while p:
+                    # TODO: provably it could be improved with a traverse
+                    # over current_inherit_children for nodes of type
+                    # type(p)
+                    if p in inherit_children:
+                        found = True
+                        break
+                    p = p.parent
+                if found:
+                    return
+            inherit_vals['inheritance_node'].append(node)
+            # current_inherit_vals['rawsource'] += node.astext() + "\n"
+
         current_inherit_ref = None
         current_inherit_vals = None
         for node in self.document.traverse():
@@ -212,16 +238,17 @@ class Replacer(Transform):
                 node['inheritnode'] = inherit_node
                 if (inherit_node_type not in ('section', 'title') or
                         node.parent.index(node) <= 1):
+                    add_to_inherit_vals(current_inherit_vals, node)
                     continue
                 # inheritref node introduced by inheritref directive is
                 # introduced in a wrong position when nodetype is 'section' or
                 # title; it's introduced as child of previous section when it
                 # as previous simbling node respect inherited node
-                node.parent.replace(node, [])
-                inherit_node.replace_self([node, inherit_node])
+                node.parent.remove(node)
+                inherit_node.parent.insert(
+                    inherit_node.parent.index(inherit_node), node)
                 continue
 
-            parent = node.parent
             text = node.astext()
             match = pattern.search(text)
             if match:
@@ -259,34 +286,29 @@ class Replacer(Transform):
                                 position, nodetype))
                 ref = '%s:%s:%s' % (refsource, nodetype, refid)
                 current_inherit_ref = ref
+
+                container = inheritance_node()
+                container['source'] = path(source).relpath()
+                container['inheritref'] = ref
+                # container['rawsource'] = inherit_vals['rawsource']
+
                 current_inherit_vals = {
                     'nodetype': nodetype,
                     'position': position,
-                    'nodes': [],
+                    'inheritance_node': container,
                     'replaced': 0,
-                    'source': source,
+                    'source': path(source).relpath(),
+                    # 'rawsource': node.astext() + "\n",
                     'line': node.line,
                     }
                 inherits.setdefault(ref, []).append(current_inherit_vals)
                 if config.verbose:
                     sys.stderr.write("Putting in inherits '%s' from file %s\n"
                             % (ref, source))
-                if parent:
-                    parent.replace(node, [])
                 continue
 
-            if current_inherit_ref:
-                if parent:
-                    found = False
-                    p = parent
-                    while p:
-                        if p in current_inherit_vals['nodes']:
-                            found = True
-                            break
-                        p = p.parent
-                    if found:
-                        continue
-                current_inherit_vals['nodes'].append(node)
+            add_to_inherit_vals(current_inherit_vals, node)
+
         if current_inherit_ref is not None:
             self._check_inherit_vals(current_inherit_ref, current_inherit_vals)
 
@@ -308,23 +330,27 @@ class Replacer(Transform):
                             inherit_ref, type(node_list))
             return node_list[0]
 
+        inherit_children = inherit_vals['inheritance_node'].children
+
         if (inherit_vals['position'] == 'inside' and
                 inherit_vals['nodetype'] == 'toctree'):
             inh_node = get_and_check_size_type('inside', 'toctree',
-                    inherit_vals['nodes'], 1, 1, docutils.nodes.compound)
+                    inherit_children, 1, 1, docutils.nodes.compound)
             inh_node = get_and_check_size_type('inside', 'toctree',
                     inh_node.children, 1, 1, sphinx.addnodes.toctree)
-            inherit_vals['nodes'] = [inh_node]
+            inherit_vals['inheritance_node'].clear()
+            inherit_vals['inheritance_node'].append(inh_node)
         elif (inherit_vals['position'] == 'inside' and
                 inherit_vals['nodetype'] == 'bullet_list'):
             if config.verbose:
                 sys.stderr.write("inherit_vals bullet_list: %s\n" %
                         pprint.pformat(inherit_vals, indent=2))
             inh_node = get_and_check_size_type('inside', 'bullet_list',
-                    inherit_vals['nodes'], 1, None, docutils.nodes.bullet_list)
+                    inherit_children, 1, None, docutils.nodes.bullet_list)
             if config.verbose:
                 sys.stderr.write("inh_node bullet_list: %s\nchildren: %s\n"
                         % (inh_node, inh_node.children))
+            # TODO: it is missing to do something?
         return
 
 
@@ -361,14 +387,17 @@ def search_inheritances(app, doctree):
                             "directive doesn't have any inheritance.\n"
                                     % node['inheritref'])
                 continue
+            if app.config.inheritance_debug:
+                sys.stderr.write("DEBUG: inheritance_%s (%s) found\n"
+                    % (node['inheritref'], node['inheritnodetype']))
             apply_inheritance(app, [node, inherit_node], node['inheritref'])
         return
-    # no autoreferences
+    # autoreferences
     for node in doctree.traverse():
         if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
             continue
-        #text = node.astext()
-        #source = node.document and node.document.attributes['source'] or ''
+        # text = node.astext()
+        # source = node.document and node.document.attributes['source'] or ''
         inheritref = generate_inheritref(node)
         if inheritref in inherits:
             apply_inheritance(app, [node], inheritref)
@@ -376,6 +405,9 @@ def search_inheritances(app, doctree):
 
 
 def apply_inheritance(app, node_list, inheritref):
+    """
+    ;param node_list: two-item list with the inheritref_node + inherited node
+    """
     for n in node_list:
         if isinstance(n, (docutils.nodes.Inline, docutils.nodes.Text)):
             sys.stderr.write("WARNING: Inheritance to an unsuported Inline or "
@@ -383,43 +415,84 @@ def apply_inheritance(app, node_list, inheritref):
             # if debug, more info
             return
     for inherit_vals in inherits.get(inheritref, []):
-        # aquest debug falla
         position = inherit_vals['position']
-        inherit_nodes = inherit_vals['nodes']
-        for inherit_toctree in inherit_nodes:
-            search_inheritances(app, inherit_toctree)
+        inheritance_container = inherit_vals['inheritance_node']
+
+        # Search and apply inheritance inside nodes to insert
+        if app.config.verbose:
+            sys.stderr.write("Searching inheritances in inherited nodes: %s\n"
+                % inheritance_container.__repr__())
+        search_inheritances(app, inheritance_container)
+
+        if app.config.verbose:
+            sys.stderr.write("inherit_vals[%s]: %s" % (inheritref,
+                    pprint.pformat(inherit_vals)))
+            sys.stderr.write("Applying inheritance %s over %s:\n"
+                " - parent of node_list[0] (%s): %s\n"
+                " - parent of node_list[-1] (%s): %s\n"
+                % (position, inheritref,
+                    type(node_list[0]), node_list[0].parent.__repr__(),
+                    type(node_list[-1]), node_list[-1].parent.__repr__()))
+
+        start_node_list_size = len(node_list)
         if position == u'after':
-            node_list[-1].replace_self([node_list[-1]] + inherit_nodes)
+            inherited_node = node_list[-1]
+            inherited_node.parent.insert(
+                inherited_node.parent.index(inherited_node) + 1,
+                inheritance_container)
         elif position == u'before':
-            node_list[0].replace_self(inherit_nodes + [node_list[0]])
+            inherited_node = node_list[0]
+            inherited_node.parent.insert(
+                inherited_node.parent.index(inherited_node),
+                inheritance_container)
         elif position == u'inside':
             if inherit_vals['nodetype'] == 'toctree':
                 if app.config.verbose:
-                    sys.stderr.write("inherit_nodes of 'inside' 'toctree': "
-                            "%s\nnode_list: %s\n" % (inherit_nodes[0],
-                                    node_list[1]))
-                    sys.stderr.write("inherit_nodes['entries'] of 'inside' "
-                            "'toctree': %s\nnode_list['entries']: %s\n" % (
-                                    inherit_nodes[0]['entries'],
-                                    node_list[1]['entries']))
-                node_list[1]['entries'].extend(inherit_nodes[0]['entries'])
+                    sys.stderr.write("container children of 'inside' "
+                        "'toctree': %s\nnode_list: %s\n"
+                        % (inheritance_container[0], node_list[1]))
+                    sys.stderr.write("container['entries'] of 'inside' "
+                        "'toctree': %s\nnode_list['entries']: %s\n"
+                        % (inheritance_container[0]['entries'],
+                            node_list[1]['entries']))
+
+                node_list[1]['entries'].extend(
+                    inheritance_container[0]['entries'])
                 node_list[1]['includefiles'].extend(
-                        inherit_nodes[0]['includefiles'])
+                    inheritance_container[0]['includefiles'])
             elif inherit_vals['nodetype'] == 'bullet_list':
                 if app.config.verbose:
-                    sys.stderr.write("inherit_nodes of 'inside' 'bullet_list':"
-                            " %s\nnode_list: %s\n" % (inherit_nodes[0],
-                                    node_list[1]))
-                    sys.stderr.write("inherit_nodes.children of 'inside' "
-                            "'bullet_list': %s\nnode_list.children: %s\n"
-                                    % (inherit_nodes[0].children,
-                                            node_list[1].children))
-                node_list[1].extend(inherit_nodes[0].children)
-                if len(inherit_nodes) > 1:
+                    sys.stderr.write("inheritance_container of 'inside' "
+                        "'bullet_list': %s\nnode_list: %s\n"
+                        % (inheritance_container[0], node_list[1]))
+                    sys.stderr.write("inheritance_container.children of "
+                        "'inside' 'bullet_list': %s\nnode_list.children: %s\n"
+                        % (inheritance_container[0].children,
+                            node_list[1].children))
+
+                node_list[1].extend(inheritance_container[0].children)
+                if len(inheritance_container) > 1:
                     node_list[-1].replace_self([node_list[-1]] +
-                            inherit_nodes[1:])
+                            inheritance_container[1:])
+                    inherited_node = node_list[-1]
+                    insert_index = (inherited_node.parent.index(inherited_node)
+                        + 1)
+                    for node in inheritance_container.children[1:]:
+                        inherited_node.parent.insert(insert_index, node)
+                        insert_index += 1
             else:
-                node_list[-1].extend(inherit_nodes)
+                node_list[-1].append(inheritance_container)
+
+        if app.config.verbose:
+            sys.stderr.write("Applied inheritance %s over %s:\n"
+                " - initial len(node_list): %s, current len(node_list): %s\n"
+                " - parent of container: %s\n"
+                " - node_list[0].parent == container parent? %s\n"
+                " - node_list[-1].parent == container parent? %s\n"
+                % (position, inheritref, start_node_list_size, len(node_list),
+                    inheritance_container.parent.__repr__(),
+                    inheritance_container.parent == node_list[0].parent,
+                    inheritance_container.parent == node_list[-1].parent))
         inherit_vals['replaced'] += 1
     return
 
@@ -434,6 +507,8 @@ def replace_inheritances(app, doctree, fromdocname):
                 % fromdocname)
     app.builder.env.build_toc_from(fromdocname, doctree)
     return
+    # TODO: implement detection of modifications in inheritances to regenerate
+    # parents
     modules = [m for m in app.config.inheritance_modules if m != 'trytond_doc']
     if fromdocname == 'index' or fromdocname.split('/')[0] in modules:
         if app.config.verbose:
@@ -441,23 +516,8 @@ def replace_inheritances(app, doctree, fromdocname):
         doctree_pages[fromdocname] = doctree
 
 
-def create_inheritref_target(app, inheritref):
-    node_list = [
-        docutils.nodes.target('', '', ids=[inheritref]),
-        ]
-    if app.config.inheritance_debug:
-        abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]',
-            explanation=inheritref)
-        node_list.append(abbrnode)
-    return node_list
-
-
 def add_references(app, doctree, fromdocname):
     if not app.config.inheritance_autoreferences:
-        for node in doctree.traverse(inheritref_node):
-            targetref = node['inheritref']
-            node_list = create_inheritref_target(app, targetref)
-            node.replace_self(node_list)
         return
     for node in doctree.traverse():
         if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
@@ -476,10 +536,11 @@ def add_references(app, doctree, fromdocname):
                         "Ignored.\n")
             node.replace_self([])
             continue
-        targetref = generate_inheritref(node)
-        node_list = create_inheritref_target(app, targetref)
-        node_list.append(node)
-        node.replace_self(node_list)
+
+        inheritref = inheritref_node('')
+        inheritref['inheritref'] = generate_inheritref(node)
+        inheritref['inheritnodetype'] = node.__class__.__name__
+        node.parent.insert(node.parent.index(node), inheritref)
     return
 
 
@@ -500,6 +561,34 @@ def report_warnings(app, exception):
                         values['replaced']))
 
 
+def visit_inheritref_node(self, node):
+    inheritref = node['inheritref']
+    target = docutils.nodes.target('', '', ids=[inheritref])
+    self.visit_target(target)
+    self.depart_target(target)
+
+    if self.settings.env.config.inheritance_debug:
+        abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]',
+            explanation=inheritref)
+        self.visit_abbreviation(abbrnode)
+        self.body.append('[+id]')
+        self.depart_abbreviation(abbrnode)
+
+
+def depart_inheritref_node(self, node):
+    pass
+
+
+def visit_inheritance_node(self, node):
+    self.body.append(self.starttag(node, 'span', '', CLASS='inheritance',
+            DATA_SOURCE=node['source'], DATA_INHERITREF=node['inheritref']))
+    self.context.append('</span>')
+
+
+def depart_inheritance_node(self, node):
+    self.body.append(self.context.pop())
+
+
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
     app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'),
@@ -509,10 +598,21 @@ def setup(app):
                     '(?P<identifier>[a-zA-Z]+)'), 'env')
     app.add_config_value('inheritance_modules', [], 'env')
     app.add_config_value('inheritance_autoreferences', False, 'env')
-    app.add_config_value('inheritance_debug', False, 'env'),
-    app.add_config_value('verbose', False, 'env'),
+    app.add_config_value('inheritance_debug', False, 'env')
+    app.add_config_value('verbose', False, 'env')
 
-    app.add_node(inheritref_node)
+    app.add_node(inheritref_node,
+        html=(visit_inheritref_node, depart_inheritref_node),
+        latex=(visit_inheritref_node, depart_inheritref_node),
+        text=(visit_inheritref_node, depart_inheritref_node),
+        man=(visit_inheritref_node, depart_inheritref_node),
+        texinfo=(visit_inheritref_node, depart_inheritref_node))
+    app.add_node(inheritance_node,
+        html=(visit_inheritance_node, depart_inheritance_node),
+        latex=(visit_inheritance_node, depart_inheritance_node),
+        text=(visit_inheritance_node, depart_inheritance_node),
+        man=(visit_inheritance_node, depart_inheritance_node),
+        texinfo=(visit_inheritance_node, depart_inheritance_node))
 
     app.add_directive('inheritref', InheritRef)
 
