@@ -586,7 +586,9 @@ def visit_inheritance_node(self, node):
 
 
 def depart_inheritance_node(self, node):
-    self.body.append(self.context.pop())
+    a = self.context.pop()
+    sys.stderr.write("=================================%s\n" % a)
+    self.body.append(a)
 
 
 def setup(app):
