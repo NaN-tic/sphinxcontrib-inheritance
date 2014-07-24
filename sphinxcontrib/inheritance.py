@@ -564,10 +564,12 @@ def report_warnings(app, exception):
 def visit_inheritref_node(self, node):
     inheritref = node['inheritref']
     target = docutils.nodes.target('', '', ids=[inheritref])
+    node.insert(0, target)
     self.visit_target(target)
     self.depart_target(target)
 
-    if self.settings.env.config.inheritance_debug:
+    if (hasattr(self, 'settings') and
+            self.settings.env.config.inheritance_debug):
         abbrnode = sphinx.addnodes.abbreviation('[+id]', '[+id]',
             explanation=inheritref)
         self.visit_abbreviation(abbrnode)
@@ -586,9 +588,7 @@ def visit_inheritance_node(self, node):
 
 
 def depart_inheritance_node(self, node):
-    a = self.context.pop()
-    sys.stderr.write("=================================%s\n" % a)
-    self.body.append(a)
+    self.body.append(self.context.pop())
 
 
 def setup(app):
