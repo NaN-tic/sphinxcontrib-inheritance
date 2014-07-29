@@ -16,6 +16,7 @@ from path import path
 
 import docutils.nodes
 import sphinx
+from sphinx import addnodes
 from docutils.parsers.rst import Directive
 from docutils.transforms import Transform
 
@@ -41,7 +42,6 @@ SUPORTED_NODETYPES_POSITIONS = {
 
 existing_ids = set()
 inherits = {}
-doctree_pages = {}
 inherit_types = set()
 
 
@@ -202,14 +202,16 @@ class Replacer(Transform):
                         % (ref, next_node.tagname))
 
     def apply(self):
-        config = self.document.settings.env.config
-        pattern = config.inheritance_pattern
+        env = self.document.settings.env
+        pattern = env.config.inheritance_pattern
         if isinstance(pattern, basestring):
             pattern = re.compile(pattern)
 
         def add_to_inherit_vals(inherit_vals, node):
             if not inherit_vals:
                 return
+            if isinstance(node, addnodes.toctree):
+                node['parent'] = inherit_vals['inherited_docname']
             if node.parent:
                 found = False
                 p = node.parent
@@ -233,7 +235,8 @@ class Replacer(Transform):
             if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
                 continue
             if isinstance(node, inheritref_node):
-                inherit_node = Replacer._search_inherited_node(node, config)
+                inherit_node = Replacer._search_inherited_node(node,
+                    env.config)
                 inherit_node_type = node['inheritnodetype']
                 node['inheritnode'] = inherit_node
                 if (inherit_node_type not in ('section', 'title') or
@@ -270,7 +273,7 @@ class Replacer(Transform):
                 source = (node.document and node.document.attributes['source']
                     or '')
                 try:
-                    position, refsource, nodetype, refid = \
+                    position, inherited_docname, nodetype, refid = \
                             refdata.split(':')
                 except ValueError:
                     raise ValueError('Invalid inheritance ref "%s" at %s:%s'
@@ -284,7 +287,7 @@ class Replacer(Transform):
                             '%s:%s. The position "%s" is not supported for '
                             'node types "%s"' % (refdata, source, node.line,
                                 position, nodetype))
-                ref = '%s:%s:%s' % (refsource, nodetype, refid)
+                ref = '%s:%s:%s' % (inherited_docname, nodetype, refid)
                 current_inherit_ref = ref
 
                 container = inheritance_node()
@@ -293,6 +296,7 @@ class Replacer(Transform):
                 # container['rawsource'] = inherit_vals['rawsource']
 
                 current_inherit_vals = {
+                    'inherited_docname': inherited_docname,
                     'nodetype': nodetype,
                     'position': position,
                     'inheritance_node': container,
@@ -302,9 +306,21 @@ class Replacer(Transform):
                     'line': node.line,
                     }
                 inherits.setdefault(ref, []).append(current_inherit_vals)
-                if config.verbose:
-                    sys.stderr.write("Putting in inherits '%s' from file %s\n"
+                if env.config.verbose:
+                    sys.stderr.write("Put in inherits '%s' from file %s\n"
                             % (ref, source))
+
+                current_docname = path(source).relpath(env.srcdir)\
+                    .split('.')[0]
+                if env.config.verbose:
+                    sys.stderr.write("-- Adding to files_to_rebuild[%s]: %s\n"
+                        % (current_docname, inherited_docname))
+                env.files_to_rebuild.setdefault(current_docname,
+                    set()).add(inherited_docname)
+                if current_docname in env.toctree_includes:
+                    for docname in env.toctree_includes[current_docname]:
+                        env.files_to_rebuild.setdefault(docname,
+                            set()).add(inherited_docname)
                 continue
 
             add_to_inherit_vals(current_inherit_vals, node)
@@ -355,24 +371,19 @@ class Replacer(Transform):
 
 
 def init_transformer(app):
-    if app.config.inheritance_plaintext:
-        app.add_transform(Replacer)
-
-
-def check_module(app, docname, text):
+    env = app.builder.env
+    srcdir_path = path(app.builder.env.srcdir)
     modules = app.config.inheritance_modules
     if isinstance(modules, (str, unicode)):
         modules = [x.strip() for x in modules.split(',')]
-    path = os.path.split(docname)
-    if len(path) == 1:
-        return
-    module = path[-2]
-    if not module:
-        return
-    if module not in modules:
-        # If the module is not in the list of installed
-        # modules set as if the document was empty.
-        text[0] = ''
+    app.config.exclude_patterns += [str(d.relpath(srcdir_path))
+        for d in srcdir_path.dirs() if d.relpath(srcdir_path) not in modules]
+
+    env.found_docs = set(d for d in env.found_docs
+        if d == app.config.master_doc or d.split('/')[0] in modules)
+
+    if app.config.inheritance_plaintext:
+        app.add_transform(Replacer)
 
 
 def search_inheritances(app, doctree):
@@ -408,6 +419,32 @@ def apply_inheritance(app, node_list, inheritref):
     """
     ;param node_list: two-item list with the inheritref_node + inherited node
     """
+    def add_docname_to_toctree_includes(current_node_source,
+            inherited_node_source):
+        env = app.builder.env
+        node_docname = path(current_node_source).relpath(env.srcdir)\
+            .split('.')[0]
+        inherited_docname = path(inherited_node_source).relpath(env.srcdir)\
+            .split('.')[0]
+        if app.config.verbose:
+            sys.stderr.write("current/inherited_node_docname: %s--%s\n"
+                % (node_docname, inherited_docname))
+
+        # when document is included in toctree:
+        # - there is an entry for document with toctree in env.toctree_includes
+        #    with the list of documents included in toctree
+        # - there is the reverse relation in files_to_rebuild: per each file
+        #   included in toctree, there is an entry in files_to_rebuild with a
+        #   set of documents that include it
+        # Here, if inherited document is included in any toctree, it adds
+        # current document in env.toctree_includes entry for document with
+        # toctree and the reverse relation in env.files_to_rebuild
+        for docname in env.files_to_rebuild.get(inherited_docname, []):
+            if docname in env.toctree_includes:
+                env.toctree_includes[docname].append(node_docname)
+                env.files_to_rebuild.setdefault(docname,
+                    set()).add(node_docname)
+
     for n in node_list:
         if isinstance(n, (docutils.nodes.Inline, docutils.nodes.Text)):
             sys.stderr.write("WARNING: Inheritance to an unsuported Inline or "
@@ -439,12 +476,20 @@ def apply_inheritance(app, node_list, inheritref):
             inherited_node = node_list[-1]
             inherited_node.parent.insert(
                 inherited_node.parent.index(inherited_node) + 1,
-                inheritance_container)
+                inheritance_container.children)
+            #    inheritance_container) it adds inheritance node which allows
+            # to generate specific HTML output but it breaks
+            # environment.build_toc_from() the 'traverse_in_section' part
+            add_docname_to_toctree_includes(inherit_vals['source'],
+                inherited_node.source)
         elif position == u'before':
             inherited_node = node_list[0]
             inherited_node.parent.insert(
                 inherited_node.parent.index(inherited_node),
-                inheritance_container)
+                inheritance_container.children)
+            # inheritance_container) IDEM
+            add_docname_to_toctree_includes(inherit_vals['source'],
+                inherited_node.source)
         elif position == u'inside':
             if inherit_vals['nodetype'] == 'toctree':
                 if app.config.verbose:
@@ -460,6 +505,7 @@ def apply_inheritance(app, node_list, inheritref):
                     inheritance_container[0]['entries'])
                 node_list[1]['includefiles'].extend(
                     inheritance_container[0]['includefiles'])
+                # TODO: add_docname_to_toctree_includes
             elif inherit_vals['nodetype'] == 'bullet_list':
                 if app.config.verbose:
                     sys.stderr.write("inheritance_container of 'inside' "
@@ -480,8 +526,13 @@ def apply_inheritance(app, node_list, inheritref):
                     for node in inheritance_container.children[1:]:
                         inherited_node.parent.insert(insert_index, node)
                         insert_index += 1
+                add_docname_to_toctree_includes(inherit_vals['source'],
+                    node_list[1].source)
             else:
-                node_list[-1].append(inheritance_container)
+                node_list[-1].extend(inheritance_container.children)
+                # node_list[-1].append(inheritance_container) Idem
+                add_docname_to_toctree_includes(inherit_vals['source'],
+                    node_list[-1].source)
 
         if app.config.verbose:
             sys.stderr.write("Applied inheritance %s over %s:\n"
@@ -497,23 +548,19 @@ def apply_inheritance(app, node_list, inheritref):
     return
 
 
-def replace_inheritances(app, doctree, fromdocname):
-    search_inheritances(app, doctree)
-    # regenerate the ToC of each page.
-    # TODO: it could be improved generating only for modified pages in
-    # inheritance
+def replace_inheritances(app, doctree):
     if app.config.verbose:
-        sys.stderr.write("Calling build_toc_from(fromdocname=%s)\n"
-                % fromdocname)
-    app.builder.env.build_toc_from(fromdocname, doctree)
-    return
-    # TODO: implement detection of modifications in inheritances to regenerate
-    # parents
-    modules = [m for m in app.config.inheritance_modules if m != 'trytond_doc']
-    if fromdocname == 'index' or fromdocname.split('/')[0] in modules:
-        if app.config.verbose:
-            sys.stderr.write("waiting to generate '%s' later\n" % fromdocname)
-        doctree_pages[fromdocname] = doctree
+        sys.stderr.write("replace_inheritances: %s\n" % (doctree['source'], ))
+
+    search_inheritances(app, doctree)
+
+    if app.config.verbose:
+        sys.stderr.write("  end replace_inheritances(%s):\n"
+            % doctree['source'])
+
+    # Regenerate document toc to include inherit content
+    app.builder.env.build_toc_from(app.builder.env.docname, doctree)
+    app.emit('doctree-resolved', doctree, app.builder.env.docname)
 
 
 def add_references(app, doctree, fromdocname):
@@ -591,6 +638,14 @@ def depart_inheritance_node(self, node):
     self.body.append(self.context.pop())
 
 
+def visit_nothing(self, node):
+    pass
+
+
+def depart_nothing(self, node):
+    pass
+
+
 def setup(app):
     app.add_config_value('inheritance_plaintext', True, 'env')
     app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'),
@@ -605,21 +660,20 @@ def setup(app):
 
     app.add_node(inheritref_node,
         html=(visit_inheritref_node, depart_inheritref_node),
-        latex=(visit_inheritref_node, depart_inheritref_node),
-        text=(visit_inheritref_node, depart_inheritref_node),
-        man=(visit_inheritref_node, depart_inheritref_node),
-        texinfo=(visit_inheritref_node, depart_inheritref_node))
+        latex=(visit_nothing, depart_nothing),
+        text=(visit_nothing, depart_nothing),
+        man=(visit_nothing, depart_nothing),
+        texinfo=(visit_nothing, depart_nothing))
     app.add_node(inheritance_node,
         html=(visit_inheritance_node, depart_inheritance_node),
-        latex=(visit_inheritance_node, depart_inheritance_node),
-        text=(visit_inheritance_node, depart_inheritance_node),
-        man=(visit_inheritance_node, depart_inheritance_node),
-        texinfo=(visit_inheritance_node, depart_inheritance_node))
+        latex=(visit_nothing, depart_nothing),
+        text=(visit_nothing, depart_nothing),
+        man=(visit_nothing, depart_nothing),
+        texinfo=(visit_nothing, depart_nothing))
 
     app.add_directive('inheritref', InheritRef)
 
     app.connect(b'builder-inited', init_transformer)
-    app.connect(b'source-read', check_module)
-    app.connect(b'doctree-resolved', replace_inheritances)
+    app.connect(b'doctree-read', replace_inheritances)
     app.connect(b'doctree-resolved', add_references)
     app.connect(b'build-finished', report_warnings)
