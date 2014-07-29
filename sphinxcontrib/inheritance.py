@@ -7,7 +7,6 @@
     :license: BSD, see LICENSE for details.
 """
 
-import os
 import pprint
 import re
 import sys
@@ -64,52 +63,6 @@ def slugify(text):
 
 def get_node_type(node):
     return str(type(node)).split('.')[-1].rstrip("'>")
-
-
-def generate_inheritref(node):
-    found = False
-    value = node.astext()
-    value = value.replace('[+id]', '')
-    value = value.strip()
-    node_type = get_node_type(node)
-    inherit_types.add(node_type)
-    source = node.document and node.document.attributes['source'] or ''
-    splitted = source.split(os.path.sep)
-    if len(splitted) >= 2:
-        prefix = '%s/%s' % (splitted[-2], splitted[-1].rstrip('.rst'))
-    else:
-        prefix = ''
-    word_count = 7
-    while True:
-        words = slugify(value)
-        words = words.replace(':', '_')
-        words = words.replace('.', '_')
-        words = words.replace('_', ' ')
-        words = words.split()
-        identifier = '_'.join(words[:word_count])
-        identifier = '%s:%s:%s' % (prefix, node_type, identifier)
-
-        if identifier not in existing_ids:
-            found = True
-            break
-        word_count += 1
-        if word_count > len(words):
-            break
-
-    if not found:
-        counter = 1
-        while True:
-            new_identifier = identifier + '_%d' % counter
-            if new_identifier not in existing_ids:
-                identifier = new_identifier
-                break
-            counter += 1
-
-    # TODO: By now we do not want the identifier to change because create_id()
-    # is called more than once. We need to find a better solution for creating
-    # the paragraph ID.
-    # existing_ids.add(identifier)
-    return identifier
 
 
 class InheritRef(Directive):
@@ -389,30 +342,18 @@ def init_transformer(app):
 def search_inheritances(app, doctree):
     if not doctree:
         return
-    if not app.config.inheritance_autoreferences:
-        for node in doctree.traverse(inheritref_node):
-            inherit_node = node['inheritnode']
-            if node['inheritref'] not in inherits:
-                if app.config.inheritance_debug:
-                    sys.stderr.write("DEBUG: ref '%s' found in inheritref "
-                            "directive doesn't have any inheritance.\n"
-                                    % node['inheritref'])
-                continue
+    for node in doctree.traverse(inheritref_node):
+        inherit_node = node['inheritnode']
+        if node['inheritref'] not in inherits:
             if app.config.inheritance_debug:
-                sys.stderr.write("DEBUG: inheritance_%s (%s) found\n"
-                    % (node['inheritref'], node['inheritnodetype']))
-            apply_inheritance(app, [node, inherit_node], node['inheritref'])
-        return
-    # autoreferences
-    for node in doctree.traverse():
-        if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
+                sys.stderr.write("DEBUG: ref '%s' found in inheritref "
+                        "directive doesn't have any inheritance.\n"
+                                % node['inheritref'])
             continue
-        # text = node.astext()
-        # source = node.document and node.document.attributes['source'] or ''
-        inheritref = generate_inheritref(node)
-        if inheritref in inherits:
-            apply_inheritance(app, [node], inheritref)
-    return
+        if app.config.inheritance_debug:
+            sys.stderr.write("DEBUG: inheritance_%s (%s) found\n"
+                % (node['inheritref'], node['inheritnodetype']))
+        apply_inheritance(app, [node, inherit_node], node['inheritref'])
 
 
 def apply_inheritance(app, node_list, inheritref):
@@ -563,34 +504,6 @@ def replace_inheritances(app, doctree):
     app.emit('doctree-resolved', doctree, app.builder.env.docname)
 
 
-def add_references(app, doctree, fromdocname):
-    if not app.config.inheritance_autoreferences:
-        return
-    for node in doctree.traverse():
-        if isinstance(node, (docutils.nodes.Inline, docutils.nodes.Text)):
-            # We do not want to consider inline nodes such as emphasis,
-            # strong or literal. Nor Text nodes which are the part of the
-            # paragraph that precede an inline node. There's already the
-            # Paragraph node and the anchor is added to it.
-            continue
-        if not node.parent:
-            continue
-        if isinstance(node, inheritref_node):
-            # to be safe. previously it must to be detected
-            if app.config.inheritance_debug:
-                sys.stderr.write("WARNING: Found 'inheritref' directive but "
-                        "'inheritance_autoreferences' option is True. "
-                        "Ignored.\n")
-            node.replace_self([])
-            continue
-
-        inheritref = inheritref_node('')
-        inheritref['inheritref'] = generate_inheritref(node)
-        inheritref['inheritnodetype'] = node.__class__.__name__
-        node.parent.insert(node.parent.index(node), inheritref)
-    return
-
-
 def report_warnings(app, exception):
     if app.config.verbose and inherit_types:
         sys.stderr.write("Used inherit types:\n - %s\n"
@@ -654,7 +567,6 @@ def setup(app):
             re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z_]+):'
                     '(?P<identifier>[a-zA-Z]+)'), 'env')
     app.add_config_value('inheritance_modules', [], 'env')
-    app.add_config_value('inheritance_autoreferences', False, 'env')
     app.add_config_value('inheritance_debug', False, 'env')
     app.add_config_value('verbose', False, 'env')
 
@@ -675,5 +587,4 @@ def setup(app):
 
     app.connect(b'builder-inited', init_transformer)
     app.connect(b'doctree-read', replace_inheritances)
-    app.connect(b'doctree-resolved', add_references)
     app.connect(b'build-finished', report_warnings)

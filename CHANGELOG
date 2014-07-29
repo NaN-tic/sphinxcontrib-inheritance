@@ -1,3 +1,8 @@
+* Fix compilatio with singlehtml and latex builders
+* Fix ToC and Toctree update after inheritance (require patch on sphinx to
+  order the documents to read by inheritance order)
+* Removed autoreference option
+
 Version 0.6 - 2014-07-08
 
 * Fix nested inheritances: inheritance of content in an inheritance

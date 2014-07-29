@@ -43,7 +43,6 @@ or::
 
 Other important configuration options for inheritance are::
 
-    inheritance_autoreferences = True
     inheritance_debug = False
     verbose = False
 
@@ -107,15 +106,12 @@ The last parameter is the **identifier of existing node**. It could be a part
 or little summary about referenced node, or a less content-dependant
 identifier.
 
-The inherit references could be generated automatically by the system or, since
-the 0.4 version, it could be defined explicitly with the **inheritref**
-directive. You can configure it with the **inheritance_autoreferences**
-configuration option, which is True by default to mantain the same behaviour
-than 0.3 version.
+The inherit references must to be defined explicitly with the **inheritref**
+directive.
 
 
-Explicit inherit references
-***************************
+Defining an inherit references
+******************************
 
 This is an example of use of **inheritref** directive::
 
@@ -134,33 +130,6 @@ explicit inherit references).
 If an inheritance is not applied or not as you expect, setting true the
 **inheritance_debug** option in *conf.py* file will help you. If you found a
 bug, provably the **verbose** option will help you to found the solution.
-
-
-Auto-generated inherit references
-*********************************
-
-Note that a section and its title may have the same identifier but replacing
-the section replaces the title and all the paragraphs in the section. The same
-applies to the *after* position. Using *after* on a *title* implies that the
-new node will be the first in the *section*, wheareas using it with a *section*
-it means it will go after the last paragraph of the section.
-
-A node's identifier is automatically created by the system by replacing
-spaces and other non-ascii charaters by "**_**" and picking only the first 7
-words of the node.
-
-There are two ways of knowing this ID:
-
-* Taking a look at the HTML code generated and see what 'id' attribute has been
-  given to the paragraph or section. Note that this means that this extension
-  adds anchors to *all* rst elements (except inline directives) and thus you
-  can access to *filename.html#identifier_of_existing_paragraph*.
-
-* Adding the configuration value *inheritance_debug* in your *conf.py*. That
-  will add a *[+id]* on each paragraph (or item which can be hooked to) and it
-  will display a tooltip on hover with the type of element (such as Paragraph,
-  Title or Section) followed by the identifier. Note that this approach is only
-  valid for HTML output.
 
 
 Restrictions in position usage
