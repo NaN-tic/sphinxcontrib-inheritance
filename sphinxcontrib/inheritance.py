@@ -339,6 +339,48 @@ def init_transformer(app):
         app.add_transform(Replacer)
 
 
+def sort_docnames(app, env, docnames):
+    inheritance_modules = app.config.inheritance_modules
+    if not inheritance_modules:
+        return docnames
+
+    # inheritance modules should come ordered by inheritance dependency
+    # It reverse them to read before the document that inherits than the
+    # inherited document
+    inheritance_modules.reverse()
+
+    # docnames that aren't in any module. it should be only base index
+    sorted_docnames = [d for d in docnames
+        if d.split('/')[0] not in inheritance_modules]
+    if len(sorted_docnames) > 1:
+        sys.stderr.write("WARN: there are more than one docname out of "
+            "inheritance modules: %s\n" % ",".join(sorted_docnames))
+
+    # add docnames sorted by order of its module in inheritance_modules list
+    sorted_docnames += [d
+        for (_, d_by_m) in zip(inheritance_modules,
+            [[d for d in docnames
+                    if d.split('/')[0] == m]
+                for m in inheritance_modules])
+        for d in d_by_m]
+    return sorted_docnames
+
+
+def replace_inheritances(app, doctree):
+    if app.config.verbose:
+        sys.stderr.write("replace_inheritances: %s\n" % (doctree['source'], ))
+
+    search_inheritances(app, doctree)
+
+    if app.config.verbose:
+        sys.stderr.write("  end replace_inheritances(%s):\n"
+            % doctree['source'])
+
+    # Regenerate document toc to include inherit content
+    app.builder.env.build_toc_from(app.builder.env.docname, doctree)
+    app.emit('doctree-resolved', doctree, app.builder.env.docname)
+
+
 def search_inheritances(app, doctree):
     if not doctree:
         return
@@ -489,21 +531,6 @@ def apply_inheritance(app, node_list, inheritref):
     return
 
 
-def replace_inheritances(app, doctree):
-    if app.config.verbose:
-        sys.stderr.write("replace_inheritances: %s\n" % (doctree['source'], ))
-
-    search_inheritances(app, doctree)
-
-    if app.config.verbose:
-        sys.stderr.write("  end replace_inheritances(%s):\n"
-            % doctree['source'])
-
-    # Regenerate document toc to include inherit content
-    app.builder.env.build_toc_from(app.builder.env.docname, doctree)
-    app.emit('doctree-resolved', doctree, app.builder.env.docname)
-
-
 def report_warnings(app, exception):
     if app.config.verbose and inherit_types:
         sys.stderr.write("Used inherit types:\n - %s\n"
@@ -586,5 +613,6 @@ def setup(app):
     app.add_directive('inheritref', InheritRef)
 
     app.connect(b'builder-inited', init_transformer)
+    app.connect(b'env-read-docs', sort_docnames)
     app.connect(b'doctree-read', replace_inheritances)
     app.connect(b'build-finished', report_warnings)
