@@ -270,10 +270,6 @@ class Replacer(Transform):
                         % (current_docname, inherited_docname))
                 env.files_to_rebuild.setdefault(current_docname,
                     set()).add(inherited_docname)
-                if current_docname in env.toctree_includes:
-                    for docname in env.toctree_includes[current_docname]:
-                        env.files_to_rebuild.setdefault(docname,
-                            set()).add(inherited_docname)
                 continue
 
             add_to_inherit_vals(current_inherit_vals, node)
@@ -377,8 +373,14 @@ def replace_inheritances(app, doctree):
             % doctree['source'])
 
     # Regenerate document toc to include inherit content
+    # The inheritance_modules list (in conf.py) must to be ordered by
+    # inheritance dependency to ensure that here all inheritances over current
+    # docname has been applied
+    if app.builder.env.docname in app.builder.env.toctree_includes:
+        # Avoid to duplicate content of toctree_includes[docname] when call
+        # build_toc_from
+        del app.builder.env.toctree_includes[app.builder.env.docname]
     app.builder.env.build_toc_from(app.builder.env.docname, doctree)
-    app.emit('doctree-resolved', doctree, app.builder.env.docname)
 
 
 def search_inheritances(app, doctree):
@@ -402,7 +404,7 @@ def apply_inheritance(app, node_list, inheritref):
     """
     ;param node_list: two-item list with the inheritref_node + inherited node
     """
-    def add_docname_to_toctree_includes(current_node_source,
+    def add_docname_to_files_to_rebuild(current_node_source,
             inherited_node_source):
         env = app.builder.env
         node_docname = path(current_node_source).relpath(env.srcdir)\
@@ -420,11 +422,10 @@ def apply_inheritance(app, node_list, inheritref):
         #   included in toctree, there is an entry in files_to_rebuild with a
         #   set of documents that include it
         # Here, if inherited document is included in any toctree, it adds
-        # current document in env.toctree_includes entry for document with
-        # toctree and the reverse relation in env.files_to_rebuild
+        # current document in env.files_to_rebuild for all documents that
+        # include inherited document
         for docname in env.files_to_rebuild.get(inherited_docname, []):
             if docname in env.toctree_includes:
-                env.toctree_includes[docname].append(node_docname)
                 env.files_to_rebuild.setdefault(docname,
                     set()).add(node_docname)
 
@@ -463,7 +464,7 @@ def apply_inheritance(app, node_list, inheritref):
             #    inheritance_container) it adds inheritance node which allows
             # to generate specific HTML output but it breaks
             # environment.build_toc_from() the 'traverse_in_section' part
-            add_docname_to_toctree_includes(inherit_vals['source'],
+            add_docname_to_files_to_rebuild(inherit_vals['source'],
                 inherited_node.source)
         elif position == u'before':
             inherited_node = node_list[0]
@@ -471,7 +472,7 @@ def apply_inheritance(app, node_list, inheritref):
                 inherited_node.parent.index(inherited_node),
                 inheritance_container.children)
             # inheritance_container) IDEM
-            add_docname_to_toctree_includes(inherit_vals['source'],
+            add_docname_to_files_to_rebuild(inherit_vals['source'],
                 inherited_node.source)
         elif position == u'inside':
             if inherit_vals['nodetype'] == 'toctree':
@@ -488,7 +489,7 @@ def apply_inheritance(app, node_list, inheritref):
                     inheritance_container[0]['entries'])
                 node_list[1]['includefiles'].extend(
                     inheritance_container[0]['includefiles'])
-                # TODO: add_docname_to_toctree_includes
+                # TODO: add_docname_to_files_to_rebuild
             elif inherit_vals['nodetype'] == 'bullet_list':
                 if app.config.verbose:
                     sys.stderr.write("inheritance_container of 'inside' "
@@ -509,12 +510,12 @@ def apply_inheritance(app, node_list, inheritref):
                     for node in inheritance_container.children[1:]:
                         inherited_node.parent.insert(insert_index, node)
                         insert_index += 1
-                add_docname_to_toctree_includes(inherit_vals['source'],
+                add_docname_to_files_to_rebuild(inherit_vals['source'],
                     node_list[1].source)
             else:
                 node_list[-1].extend(inheritance_container.children)
                 # node_list[-1].append(inheritance_container) Idem
-                add_docname_to_toctree_includes(inherit_vals['source'],
+                add_docname_to_files_to_rebuild(inherit_vals['source'],
                     node_list[-1].source)
 
         if app.config.verbose:
