@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 with open('README') as stream:
     long_desc = stream.read()
 
-requires = ['Sphinx>=1.0b2']
+requires = ['Sphinx>=1.3a0']
 
 setup(
     name='sphinxcontrib-inheritance',
