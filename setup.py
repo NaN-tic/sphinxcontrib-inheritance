@@ -5,11 +5,14 @@ from setuptools import setup, find_packages
 with open('README') as stream:
     long_desc = stream.read()
 
-requires = ['Sphinx>=1.3a0']
+requires = [
+    'path.py',
+    'Sphinx>=1.3a0',
+    ]
 
 setup(
     name='sphinxcontrib-inheritance',
-    version='0.6',
+    version='0.7',
     url='https://bitbucket.org/nantic/sphinxcontrib-inheritance',
     download_url='http://pypi.python.org/pypi/sphinxcontrib-inheritance',
     license='BSD',
