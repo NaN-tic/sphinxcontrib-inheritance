@@ -435,7 +435,12 @@ def apply_inheritance(app, node_list, inheritref):
                     "Text node. Ignored.\n")
             # if debug, more info
             return
-    for inherit_vals in inherits.get(inheritref, []):
+
+    inherit_vals_list = inherits.get(inheritref, [])
+    if not inherit_vals_list:
+        return
+    del inherits[inheritref]
+    for inherit_vals in inherit_vals_list:
         position = inherit_vals['position']
         inheritance_container = inherit_vals['inheritance_node']
 
@@ -444,9 +449,11 @@ def apply_inheritance(app, node_list, inheritref):
             sys.stderr.write("Searching inheritances in inherited nodes: %s\n"
                 % inheritance_container.__repr__())
         search_inheritances(app, inheritance_container)
+        if app.config.verbose:
+            sys.stderr.write("END searching inheritances in inherited nodes\n")
 
         if app.config.verbose:
-            sys.stderr.write("inherit_vals[%s]: %s" % (inheritref,
+            sys.stderr.write("inherit_vals[%s]: %s\n" % (inheritref,
                     pprint.pformat(inherit_vals)))
             sys.stderr.write("Applying inheritance %s over %s:\n"
                 " - parent of node_list[0] (%s): %s\n"
