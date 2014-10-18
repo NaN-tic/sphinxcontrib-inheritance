@@ -338,7 +338,7 @@ def init_transformer(app):
 def sort_docnames(app, env, docnames):
     inheritance_modules = app.config.inheritance_modules
     if not inheritance_modules:
-        return docnames
+        return
 
     # inheritance modules should come ordered by inheritance dependency
     # It reverse them to read before the document that inherits than the
@@ -346,20 +346,20 @@ def sort_docnames(app, env, docnames):
     inheritance_modules.reverse()
 
     # docnames that aren't in any module. it should be only base index
-    sorted_docnames = [d for d in docnames
+    original_docnames = docnames[:]
+    docnames = [d for d in docnames
         if d.split('/')[0] not in inheritance_modules]
-    if len(sorted_docnames) > 1:
+    if len(docnames) > 1:
         sys.stderr.write("WARN: there are more than one docname out of "
-            "inheritance modules: %s\n" % ",".join(sorted_docnames))
+            "inheritance modules: %s\n" % ",".join(docnames))
 
     # add docnames sorted by order of its module in inheritance_modules list
-    sorted_docnames += [d
+    docnames += [d
         for (_, d_by_m) in zip(inheritance_modules,
-            [[d for d in docnames
+            [[d for d in original_docnames
                     if d.split('/')[0] == m]
                 for m in inheritance_modules])
         for d in d_by_m]
-    return sorted_docnames
 
 
 def replace_inheritances(app, doctree):
@@ -621,6 +621,6 @@ def setup(app):
     app.add_directive('inheritref', InheritRef)
 
     app.connect(b'builder-inited', init_transformer)
-    app.connect(b'env-read-docs', sort_docnames)
+    app.connect(b'env-before-read-docs', sort_docnames)
     app.connect(b'doctree-read', replace_inheritances)
     app.connect(b'build-finished', report_warnings)
