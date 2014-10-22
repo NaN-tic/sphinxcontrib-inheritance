@@ -346,20 +346,20 @@ def sort_docnames(app, env, docnames):
     inheritance_modules.reverse()
 
     # docnames that aren't in any module. it should be only base index
-    original_docnames = docnames[:]
-    docnames = [d for d in docnames
+    sorted_docnames = [d for d in docnames
         if d.split('/')[0] not in inheritance_modules]
-    if len(docnames) > 1:
+    if len(sorted_docnames) > 1:
         sys.stderr.write("WARN: there are more than one docname out of "
             "inheritance modules: %s\n" % ",".join(docnames))
 
     # add docnames sorted by order of its module in inheritance_modules list
-    docnames += [d
+    sorted_docnames += [d
         for (_, d_by_m) in zip(inheritance_modules,
-            [[d for d in original_docnames
+            [[d for d in docnames
                     if d.split('/')[0] == m]
                 for m in inheritance_modules])
         for d in d_by_m]
+    docnames[:] = sorted_docnames
 
 
 def replace_inheritances(app, doctree):
