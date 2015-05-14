@@ -599,8 +599,8 @@ def setup(app):
     app.add_config_value('inheritance_pattern', re.compile(r'^#\:(.|[^#]+)#$'),
             'env')
     app.add_config_value('inheritance_reference_pattern',
-            re.compile(r'(?P<prefix>[a-zA-Z/_]+):(?P<nodetype>[a-z_]+):'
-                    '(?P<identifier>[a-zA-Z]+)'), 'env')
+            re.compile(r'(?P<prefix>[a-zA-Z/_0-9]+):(?P<nodetype>[a-z_]+):'
+                    '(?P<identifier>[a-zA-Z0-9]+)'), 'env')
     app.add_config_value('inheritance_modules', [], 'env')
     app.add_config_value('inheritance_debug', False, 'env')
     app.add_config_value('verbose', False, 'env')
