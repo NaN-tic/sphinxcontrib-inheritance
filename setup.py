@@ -12,7 +12,7 @@ requires = [
 
 setup(
     name='sphinxcontrib-inheritance',
-    version='0.7.1',
+    version='0.8.0',
     url='https://bitbucket.org/nantic/sphinxcontrib-inheritance',
     download_url='http://pypi.python.org/pypi/sphinxcontrib-inheritance',
     license='BSD',

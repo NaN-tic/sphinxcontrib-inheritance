@@ -1,3 +1,6 @@
+Version 0.8 - 2015-05-15
+* Allow numbers in inheritance reference prefixes and sections
+
 Version 0.7 - 2014-10-18
 * Adapted env-before-read-docs to Sphinx 1.3
 * Fix compilatio with singlehtml and latex builders
