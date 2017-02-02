@@ -11,7 +11,7 @@ import pprint
 import re
 import sys
 import unicodedata
-from path import path
+from path import Path
 
 import docutils.nodes
 import sphinx
@@ -244,7 +244,7 @@ class Replacer(Transform):
                 current_inherit_ref = ref
 
                 container = inheritance_node()
-                container['source'] = path(source).relpath()
+                container['source'] = Path(source).relpath()
                 container['inheritref'] = ref
                 # container['rawsource'] = inherit_vals['rawsource']
 
@@ -254,7 +254,7 @@ class Replacer(Transform):
                     'position': position,
                     'inheritance_node': container,
                     'replaced': 0,
-                    'source': path(source).relpath(),
+                    'source': Path(source).relpath(),
                     # 'rawsource': node.astext() + "\n",
                     'line': node.line,
                     }
@@ -263,7 +263,7 @@ class Replacer(Transform):
                     sys.stderr.write("Put in inherits '%s' from file %s\n"
                             % (ref, source))
 
-                current_docname = path(source).relpath(env.srcdir)\
+                current_docname = Path(source).relpath(env.srcdir)\
                     .split('.')[0]
                 if env.config.verbose:
                     sys.stderr.write("-- Adding to files_to_rebuild[%s]: %s\n"
@@ -321,7 +321,7 @@ class Replacer(Transform):
 
 def init_transformer(app):
     env = app.builder.env
-    srcdir_path = path(app.builder.env.srcdir)
+    srcdir_path = Path(app.builder.env.srcdir)
     modules = app.config.inheritance_modules
     if isinstance(modules, (str, unicode)):
         modules = [x.strip() for x in modules.split(',')]
@@ -407,9 +407,9 @@ def apply_inheritance(app, node_list, inheritref):
     def add_docname_to_files_to_rebuild(current_node_source,
             inherited_node_source):
         env = app.builder.env
-        node_docname = path(current_node_source).relpath(env.srcdir)\
+        node_docname = Path(current_node_source).relpath(env.srcdir)\
             .split('.')[0]
-        inherited_docname = path(inherited_node_source).relpath(env.srcdir)\
+        inherited_docname = Path(inherited_node_source).relpath(env.srcdir)\
             .split('.')[0]
         if app.config.verbose:
             sys.stderr.write("current/inherited_node_docname: %s--%s\n"

@@ -6,13 +6,13 @@ with open('README') as stream:
     long_desc = stream.read()
 
 requires = [
-    'path.py',
+    'path.py>=10.0',
     'Sphinx>=1.3b1',
     ]
 
 setup(
     name='sphinxcontrib-inheritance',
-    version='0.8.0',
+    version='0.9.0',
     url='https://bitbucket.org/nantic/sphinxcontrib-inheritance',
     download_url='http://pypi.python.org/pypi/sphinxcontrib-inheritance',
     license='BSD',
@@ -38,4 +38,3 @@ setup(
     install_requires=requires,
     namespace_packages=['sphinxcontrib'],
 )
-
