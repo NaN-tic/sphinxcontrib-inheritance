@@ -7,7 +7,7 @@ with open('README') as stream:
 
 requires = [
     'path.py>=10.0',
-    'Sphinx>=1.3b1',
+    'Sphinx<=1.4.9',
     ]
 
 setup(
