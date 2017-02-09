@@ -18,7 +18,8 @@ Installation
 
 This extension requires the following packages:
 
-- Sphinx 1.3
+- path.py>=10.0
+- Sphinx<=1.4.9
 
 Use ``pip`` to install this extension straight from the Python Package Index::
 
